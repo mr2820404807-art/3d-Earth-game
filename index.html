@@ -1,0 +1,2365 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>3D 高清地球</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #000010; overflow: hidden;
+    font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;
+    user-select: none; -webkit-user-select: none; cursor: grab;
+  }
+  body:active, body.dragging { cursor: grabbing; }
+  canvas { display: block; }
+
+  /* ===== 开始菜单 ===== */
+  #menu-screen {
+    position: fixed; inset: 0; z-index: 200;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    background: transparent;
+    transition: opacity 0.8s;
+  }
+  #menu-screen.hidden { opacity: 0; pointer-events: none; }
+  #menu-screen .menu-title {
+    font-size: 48px; font-weight: 300; color: #ddeeff; letter-spacing: 8px;
+    text-shadow: 0 0 60px rgba(100,160,220,0.6), 0 2px 20px rgba(0,0,0,0.8);
+    margin-bottom: 10px;
+  }
+  #menu-screen .menu-sub {
+    font-size: 13px; color: rgba(180,200,230,0.5); letter-spacing: 3px; margin-bottom: 60px;
+    text-shadow: 0 2px 10px rgba(0,0,0,0.8);
+  }
+  #menu-screen .menu-btn {
+    width: 260px; padding: 16px 0; margin: 8px 0;
+    border: 1px solid rgba(100,160,220,0.45); border-radius: 12px;
+    background: rgba(10,15,30,0.65); backdrop-filter: blur(12px);
+    color: #bbddee; font-size: 16px; letter-spacing: 4px; cursor: pointer;
+    transition: all 0.25s;
+  }
+  #menu-screen .menu-btn:hover {
+    background: rgba(30,50,90,0.8); border-color: rgba(140,190,255,0.6);
+    color: #fff; transform: scale(1.03);
+  }
+  #menu-screen .menu-btn:active { transform: scale(0.97); }
+
+  /* ===== 选择阶段 UI ===== */
+  #select-phase-hint {
+    position: fixed; top: 25%; left: 340px; transform: translateX(-50%);
+    color: rgba(220,230,255,0.75); font-size: 26px; letter-spacing: 4px; font-weight: 300;
+    z-index: 30; pointer-events: none;
+    opacity: 0; transition: opacity 0.5s;
+    text-shadow: 0 2px 12px rgba(0,0,0,0.6);
+  }
+  #select-phase-hint.visible { opacity: 1; }
+
+  /* 确认选择按钮 */
+  #confirm-btn {
+    position: fixed; bottom: 40px; right: 40px; z-index: 30;
+    padding: 14px 36px; border: 1px solid rgba(255,200,60,0.5); border-radius: 12px;
+    background: rgba(255,200,60,0.15); backdrop-filter: blur(10px);
+    color: #ffd877; font-size: 15px; letter-spacing: 3px; cursor: pointer;
+    opacity: 0; transform: translateY(20px); transition: all 0.3s; pointer-events: none;
+  }
+  #confirm-btn.visible { opacity: 1; transform: translateY(0); pointer-events: auto; }
+  #confirm-btn:hover { background: rgba(255,200,60,0.3); border-color: rgba(255,200,60,0.8); }
+
+  /* 模式切换开关 */
+  #mode-toggle {
+    position: fixed; top: 100px; right: 30px; z-index: 30;
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 14px; border-radius: 10px;
+    background: rgba(10,15,35,0.8); backdrop-filter: blur(10px);
+    border: 1px solid rgba(100,180,255,0.3);
+    opacity: 0; pointer-events: none; transition: opacity 0.4s;
+    cursor: pointer; user-select: none;
+  }
+  #mode-toggle.visible { opacity: 1; pointer-events: auto; }
+  #mode-toggle .toggle-label {
+    font-size: 11px; color: rgba(180,200,230,0.7); letter-spacing: 1px; white-space: nowrap;
+  }
+  #mode-toggle .toggle-track {
+    width: 36px; height: 20px; border-radius: 10px;
+    background: rgba(60,90,140,0.5); border: 1px solid rgba(100,180,255,0.3);
+    position: relative; transition: background 0.3s;
+  }
+  #mode-toggle .toggle-track.on { background: rgba(80,160,255,0.4); border-color: rgba(100,180,255,0.6); }
+  #mode-toggle .toggle-thumb {
+    width: 16px; height: 16px; border-radius: 50%;
+    background: #8ab4e8; position: absolute; top: 1px; left: 1px;
+    transition: transform 0.3s;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+  }
+  #mode-toggle .toggle-track.on .toggle-thumb { transform: translateX(16px); }
+
+  #back-btn {
+    position: fixed; bottom: 40px; left: 40px; z-index: 30;
+    padding: 12px 28px; border: 1px solid rgba(100,180,255,0.35); border-radius: 12px;
+    background: rgba(20,30,60,0.6); backdrop-filter: blur(10px);
+    color: #99bbdd; font-size: 14px; letter-spacing: 2px; cursor: pointer;
+    opacity: 0; transform: translateY(20px); transition: all 0.3s; pointer-events: none;
+  }
+  #back-btn.visible { opacity: 1; transform: translateY(0); pointer-events: auto; }
+  #back-btn:hover { background: rgba(40,70,120,0.7); border-color: rgba(140,190,255,0.5); color: #fff; }
+
+  /* ===== 左上角国旗（确认后常驻） ===== */
+  #flag-display {
+    position: fixed; top: 30px; left: 30px; z-index: 30;
+    display: flex; align-items: center; gap: 14px;
+    background: rgba(10,15,35,0.85); backdrop-filter: blur(16px);
+    border: 1px solid rgba(100,180,255,0.4); border-radius: 14px;
+    padding: 14px 18px; pointer-events: none;
+    opacity: 0; transform: translateX(-20px);
+    transition: opacity 0.5s, transform 0.5s;
+    width: 540px;
+  }
+  #flag-display.visible { opacity: 1; transform: translateX(0); }
+  #flag-display img {
+    width: 72px; height: 48px; border-radius: 4px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.4); object-fit: cover;
+  }
+
+  /* ===== 预选阶段：左侧中间国旗 ===== */
+  #preview-flag {
+    position: fixed; top: 0; left: 0; bottom: 0; width: 500px;
+    z-index: 29; pointer-events: none;
+    opacity: 0; transition: opacity 0.4s;
+  }
+  #preview-flag.visible { opacity: 1; }
+  #preview-flag.sink { opacity: 0; transition: opacity 0.5s; }
+  #preview-name-cn {
+    position: fixed; top: 50%; left: 340px;
+    transform: translate(-50%, -180px); z-index: 30;
+    font-size: 28px; font-weight: 700; color: #ffd877;
+    letter-spacing: 4px; white-space: nowrap; pointer-events: none;
+    text-shadow: 0 2px 12px rgba(0,0,0,0.7);
+    transition: opacity 0.2s, transform 0.2s;
+  }
+  #preview-flag-img {
+    position: fixed; top: 50%; left: 340px;
+    transform: translate(-50%, -50%); z-index: 30;
+    width: 320px; height: 213px; border-radius: 10px;
+    box-shadow: 0 8px 40px rgba(0,0,0,0.6); object-fit: cover;
+    pointer-events: none;
+    transition: opacity 0.2s, transform 0.2s;
+  }
+  #preview-flag-img.switching {
+    opacity: 0; transform: translate(-50%, -50%) scale(0.85);
+  }
+  #preview-name-en {
+    position: fixed; top: 50%; left: 340px;
+    transform: translate(-50%, 130px); z-index: 30;
+    font-size: 14px; color: rgba(180,200,230,0.7);
+    letter-spacing: 2px; white-space: nowrap; pointer-events: none;
+    text-shadow: 0 2px 8px rgba(0,0,0,0.7);
+    transition: opacity 0.2s;
+  }
+  #preview-name-cn.switching, #preview-name-en.switching { opacity: 0; }
+  #preview-gradient {
+    position: fixed; top: 0; left: 0; bottom: 0; width: 500px; z-index: 28;
+    pointer-events: none;
+    background: linear-gradient(to right, rgba(200,210,230,0.18) 0%, rgba(200,210,230,0.08) 40%, transparent 100%);
+    opacity: 0; transition: opacity 0.4s;
+  }
+  #preview-gradient.visible { opacity: 1; }
+  #preview-gradient.sink { opacity: 0; transition: opacity 0.5s; }
+
+  /* ===== 空白 UI 框通用样式 ===== */
+  .ui-box {
+    position: fixed; z-index: 30;
+    background: rgba(10,15,35,0.85); backdrop-filter: blur(16px);
+    border: 1px solid rgba(100,180,255,0.3); border-radius: 14px;
+    pointer-events: none;
+    opacity: 0; transition: opacity 0.4s;
+  }
+  .ui-box.visible { opacity: 1; }
+  #ui-left-bottom {
+    bottom: 30px; left: 30px;
+    width: 540px; height: 140px;
+    display: flex; align-items: flex-start; padding: 16px 20px;
+    gap: 14px;
+  }
+  #ui-left-bottom .lb-flag {
+    width: 72px; height: 48px; border-radius: 4px; object-fit: cover;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.4);
+    flex-shrink: 0; cursor: pointer; pointer-events: auto;
+    transition: transform 0.2s, box-shadow 0.2s;
+  }
+  #ui-left-bottom .lb-flag:hover {
+    transform: scale(1.08);
+    box-shadow: 0 4px 16px rgba(0,0,0,0.6);
+  }
+  #ui-left-bottom .lb-info {
+    display: flex; flex-direction: column; justify-content: center;
+    min-width: 0;
+  }
+  #ui-left-bottom .lb-province {
+    font-size: 18px; font-weight: 600; color: #ffd877; letter-spacing: 2px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  #ui-left-bottom .lb-country {
+    font-size: 12px; color: #8899bb; margin-top: 4px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  #ui-right-bottom {
+    bottom: 30px; right: 30px;
+    width: 280px; height: 140px;
+  }
+  #ui-right-top {
+    top: 30px; right: 30px;
+    width: 240px; height: 64px;
+    pointer-events: auto;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 12px;
+  }
+  #time-display {
+    white-space: nowrap;
+  }
+  #time-display .time-date { font-size: 10px; color: #7788aa; display: block; margin-bottom: 1px; }
+  #time-display .time-clock { font-size: 15px; color: #dde; font-family: 'Courier New', monospace; font-weight: 600; }
+  #time-controls { display: flex; align-items: center; gap: 4px; }
+  .time-btn {
+    width: 24px; height: 24px; border-radius: 6px;
+    border: 1px solid rgba(100,180,255,0.25); background: rgba(20,30,60,0.5);
+    color: #8899aa; font-size: 13px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: all 0.2s; user-select: none;
+  }
+  .time-btn:hover { background: rgba(40,70,120,0.7); border-color: rgba(140,190,255,0.5); color: #fff; }
+  .time-btn:active { transform: scale(0.92); }
+  .time-btn.active { background: rgba(80,140,220,0.4); border-color: rgba(100,180,255,0.6); color: #fff; }
+  #time-speed { font-size: 9px; color: #556; min-width: 18px; text-align: center; }
+
+  /* ===== 游戏阶段：左侧国家信息面板 ===== */
+  #game-info {
+    position: fixed; top: 50%; left: 30px; transform: translateY(-50%); z-index: 30;
+    background: rgba(10,15,35,0.85); backdrop-filter: blur(16px);
+    border: 1px solid rgba(100,180,255,0.3); border-radius: 14px;
+    padding: 20px 24px; min-width: 200px;
+    pointer-events: none;
+    opacity: 0; transform: translateX(-20px) translateY(-50%);
+    transition: opacity 0.4s, transform 0.4s;
+  }
+  #game-info.visible { opacity: 1; transform: translateX(0) translateY(-50%); }
+  #game-info img {
+    width: 96px; height: 64px; border-radius: 6px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.5); object-fit: cover; margin-bottom: 12px;
+  }
+  #game-info .gi-name {
+    font-size: 22px; font-weight: 600; color: #ffd877; letter-spacing: 2px;
+  }
+  #game-info .gi-en {
+    font-size: 11px; color: #887766; margin-top: 3px;
+  }
+  #game-info .gi-divider {
+    width: 100%; height: 1px; background: rgba(100,180,255,0.25); margin: 12px 0;
+  }
+  #game-info .gi-stats { font-size: 12px; color: #99aacc; line-height: 1.8; }
+
+  #zoom-distance {
+    position: fixed; top: 24px; left: 50%; transform: translateX(-50%);
+    color: rgba(180,200,230,0.6); font-size: 13px; font-family: 'Courier New', monospace;
+    z-index: 10; pointer-events: none;
+    background: rgba(0,0,0,0.3); padding: 6px 16px; border-radius: 6px;
+  }
+  #loading {
+    position: fixed; top: 50%; left: 50%; transform: translate(-50%,-50%);
+    color: #99bbdd; font-size: 14px; z-index: 100;
+    transition: opacity 0.5s; pointer-events: none;
+  }
+
+  /* ===== 响应式：小屏幕宽度 (< 1100px) ===== */
+  @media (max-width: 1100px) {
+    #select-phase-hint { left: 50%; font-size: 22px; }
+    #preview-name-cn { left: 50%; transform: translate(-50%, -160px); }
+    #preview-name-en { left: 50%; transform: translate(-50%, 115px); }
+  }
+
+  @media (max-width: 900px) {
+    #menu-screen .menu-title { font-size: 32px; letter-spacing: 4px; }
+    #menu-screen .menu-sub { font-size: 11px; margin-bottom: 40px; }
+    #menu-screen .menu-btn { width: 200px; padding: 12px 0; font-size: 14px; }
+
+    #select-phase-hint { left: 50%; font-size: 20px; }
+
+    #preview-flag { width: 320px; }
+    #preview-flag-img { width: 220px; height: 147px; }
+    #preview-name-cn { left: 50%; transform: translate(-50%, -140px); font-size: 22px; }
+    #preview-name-en { left: 50%; transform: translate(-50%, 100px); font-size: 12px; }
+    #preview-gradient { width: 320px; }
+
+    #flag-display { width: 320px; padding: 10px 14px; }
+    #flag-display img { width: 56px; height: 37px; }
+
+    #ui-left-bottom { width: 300px; height: 110px; padding: 12px 14px; gap: 10px; }
+    #ui-left-bottom .lb-flag { width: 56px; height: 37px; }
+    #ui-left-bottom .lb-province { font-size: 15px; }
+    #ui-left-bottom .lb-country { font-size: 11px; }
+
+    #ui-right-bottom { width: 220px; height: 110px; bottom: 20px; right: 20px; }
+    #ui-right-top { width: 200px; height: 54px; top: 20px; right: 20px; }
+
+    #game-info { left: 20px; padding: 16px 18px; min-width: 160px; }
+    #game-info img { width: 72px; height: 48px; }
+    #game-info .gi-name { font-size: 18px; }
+
+    #confirm-btn { bottom: 24px; right: 24px; padding: 10px 24px; font-size: 13px; }
+    #back-btn { bottom: 24px; left: 24px; padding: 10px 20px; font-size: 12px; }
+  }
+
+  @media (max-width: 600px) {
+    #menu-screen .menu-title { font-size: 24px; letter-spacing: 2px; }
+    #menu-screen .menu-btn { width: 160px; padding: 10px 0; font-size: 12px; letter-spacing: 2px; }
+
+    #preview-flag { width: 200px; }
+    #preview-flag-img { width: 160px; height: 107px; }
+    #preview-name-cn { font-size: 18px; }
+    #preview-name-en { font-size: 10px; }
+    #preview-gradient { width: 200px; }
+
+    #flag-display { width: 220px; padding: 8px 10px; }
+    #flag-display img { width: 42px; height: 28px; }
+
+    #ui-left-bottom { width: 240px; height: 90px; padding: 10px 12px; }
+    #ui-left-bottom .lb-flag { width: 44px; height: 29px; }
+    #ui-left-bottom .lb-province { font-size: 13px; }
+
+    #ui-right-bottom { width: 180px; height: 90px; }
+    #ui-right-top { width: 160px; height: 48px; }
+
+    #game-info { min-width: 140px; padding: 12px 14px; }
+    #game-info img { width: 56px; height: 37px; }
+    #game-info .gi-name { font-size: 15px; }
+
+    #confirm-btn { padding: 8px 18px; font-size: 12px; }
+    #back-btn { padding: 8px 16px; font-size: 11px; }
+  }
+
+  /* ===== 响应式：短屏幕 (高度 < 700px，如 1366x768 笔记本) ===== */
+  @media (max-height: 700px) {
+    #menu-screen .menu-title { font-size: 28px; margin-bottom: 6px; }
+    #menu-screen .menu-sub { margin-bottom: 24px; font-size: 10px; }
+    #menu-screen .menu-btn { padding: 10px 0; margin: 4px 0; }
+
+    #select-phase-hint { top: 15%; }
+
+    #preview-flag-img { max-height: 160px; }
+    #preview-name-cn { transform: translate(-50%, -110px); }
+    #preview-name-en { transform: translate(-50%, 80px); }
+
+    #ui-left-bottom { bottom: 16px; left: 16px; }
+    #ui-right-bottom { bottom: 16px; right: 16px; }
+    #ui-right-top { top: 16px; right: 16px; }
+    #flag-display { top: 16px; left: 16px; }
+
+    #confirm-btn { bottom: 16px; right: 16px; }
+    #back-btn { bottom: 16px; left: 16px; }
+
+    #game-info { top: 50%; }
+  }
+
+  @media (max-height: 550px) {
+    #menu-screen .menu-title { font-size: 22px; }
+    #menu-screen .menu-sub { display: none; }
+    #menu-screen .menu-btn { width: 140px; padding: 8px 0; font-size: 11px; }
+
+    #preview-flag-img { max-height: 110px; }
+    #preview-name-cn { font-size: 18px; transform: translate(-50%, -80px); }
+    #preview-name-en { font-size: 10px; transform: translate(-50%, 60px); }
+
+    #ui-left-bottom, #ui-right-bottom { height: 80px; padding: 8px 12px; }
+    #ui-right-top { height: 44px; }
+    #flag-display { padding: 6px 10px; }
+    #flag-display img { width: 36px; height: 24px; }
+
+    #game-info { padding: 10px 12px; }
+    #game-info img { width: 48px; height: 32px; }
+  }
+
+  /* ===== 响应式：超宽屏 (比例 >= 21:9) ===== */
+  @media (min-aspect-ratio: 21/9) {
+    #ui-left-bottom { width: 420px; }
+    #ui-right-bottom { width: 260px; }
+    #flag-display { width: 480px; }
+    #select-phase-hint { left: 30%; }
+  }
+
+  /* ===== 响应式：竖屏/平板 (比例 <= 3:4) ===== */
+  @media (max-aspect-ratio: 3/4) {
+    #select-phase-hint { top: 18%; left: 50%; }
+    #preview-flag { width: 280px; }
+    #preview-flag-img { width: 200px; height: 133px; }
+    #preview-name-cn { left: 50%; transform: translate(-50%, -120px); }
+    #preview-name-en { left: 50%; transform: translate(-50%, 90px); }
+    #preview-gradient { width: 280px; }
+
+    #ui-left-bottom { width: 260px; bottom: 20px; left: 20px; }
+    #ui-right-bottom { width: 200px; bottom: 20px; right: 20px; }
+    #ui-right-top { top: 20px; right: 20px; }
+
+    #confirm-btn { bottom: 20px; right: 50%; transform: translateX(50%); }
+    #back-btn { bottom: 70px; left: 50%; transform: translateX(-50%); }
+  }
+
+  /* ===== 手机适配 (<= 480px) ===== */
+  @media (max-width: 480px) {
+    #menu-screen .menu-title { font-size: 22px; letter-spacing: 3px; }
+    #menu-screen .menu-sub { font-size: 10px; margin-bottom: 30px; }
+    #menu-screen .menu-btn { width: 180px; padding: 12px 0; font-size: 13px; letter-spacing: 3px; }
+
+    #select-phase-hint { left: 50%; font-size: 16px; top: 10%; }
+
+    #preview-flag { width: 180px; top: 5%; bottom: auto; }
+    #preview-flag-img { width: 140px; height: 93px; }
+    #preview-name-cn { left: 50%; top: 40%; font-size: 16px; transform: translate(-50%, -100px); }
+    #preview-name-en { left: 50%; top: 40%; font-size: 10px; transform: translate(-50%, 90px); }
+    #preview-gradient { width: 180px; }
+
+    #flag-display { width: calc(100vw - 20px); left: 10px; top: 10px; padding: 8px 12px; gap: 10px; }
+    #flag-display img { width: 40px; height: 27px; }
+
+    #ui-left-bottom { width: calc(100vw - 20px); left: 10px; bottom: 10px; height: 80px; padding: 8px 10px; gap: 8px; }
+    #ui-left-bottom .lb-flag { width: 40px; height: 27px; }
+    #ui-left-bottom .lb-province { font-size: 13px; }
+    #ui-left-bottom .lb-country { font-size: 10px; }
+
+    #ui-right-bottom { width: calc(100vw - 20px); right: 10px; bottom: 100px; height: 60px; }
+    #ui-right-top { width: calc(100vw - 20px); right: 10px; top: 10px; height: 44px; padding: 0 8px; }
+    #time-display .time-date { font-size: 9px; }
+    #time-display .time-clock { font-size: 13px; }
+
+    #game-info { left: 10px; padding: 10px 12px; min-width: 120px; }
+    #game-info img { width: 48px; height: 32px; }
+    #game-info .gi-name { font-size: 14px; }
+    #game-info .gi-en { font-size: 10px; }
+    #game-info .gi-stats { font-size: 11px; }
+
+    #confirm-btn { bottom: 10px; right: 50%; transform: translateX(50%); padding: 10px 20px; font-size: 12px; }
+    #back-btn { bottom: 56px; left: 50%; transform: translateX(-50%); padding: 8px 16px; font-size: 11px; }
+
+    #pause-menu .pause-btn { width: 200px; padding: 12px 0; font-size: 14px; }
+
+    #mode-toggle { top: 60px; right: 10px; padding: 6px 10px; }
+    #mode-toggle .toggle-label { font-size: 10px; }
+    #mode-toggle .toggle-track { width: 32px; height: 18px; }
+    #mode-toggle .toggle-thumb { width: 14px; height: 14px; }
+    #mode-toggle .toggle-track.on .toggle-thumb { transform: translateX(14px); }
+
+    #zoom-distance { font-size: 11px; padding: 4px 10px; top: auto; bottom: 170px; }
+
+    #preview-name-cn.switching, #preview-name-en.switching { opacity: 0; }
+  }
+
+  /* ===== 高DPI屏幕微调 ===== */
+  @media (min-resolution: 2dppx) {
+    .ui-box, #flag-display, #menu-screen .menu-btn {
+      border-width: 0.5px;
+    }
+  }
+
+  /* ===== 暂停菜单 ===== */
+  #pause-overlay {
+    position: fixed; inset: 0; z-index: 500;
+    background: rgba(0,0,16,0.7); backdrop-filter: blur(6px);
+    display: flex; align-items: center; justify-content: center;
+    opacity: 0; pointer-events: none;
+    transition: opacity 0.35s;
+  }
+  #pause-overlay.visible { opacity: 1; pointer-events: auto; }
+  #pause-menu {
+    display: flex; flex-direction: column; align-items: center; gap: 16px;
+  }
+  #pause-menu .pause-btn {
+    width: 240px; padding: 14px 0;
+    border: 1px solid rgba(100,180,255,0.4); border-radius: 12px;
+    background: rgba(10,20,40,0.7); backdrop-filter: blur(12px);
+    color: #bbddee; font-size: 15px; letter-spacing: 4px; cursor: pointer;
+    transition: all 0.25s;
+  }
+  #pause-menu .pause-btn:hover {
+    background: rgba(30,50,90,0.8); border-color: rgba(140,190,255,0.6);
+    color: #fff; transform: scale(1.04);
+  }
+  #pause-menu .pause-btn:active { transform: scale(0.96); }
+  #pause-menu .pause-btn.danger {
+    border-color: rgba(255,120,100,0.4); color: #ffaa99;
+  }
+  #pause-menu .pause-btn.danger:hover {
+    background: rgba(90,30,20,0.7); border-color: rgba(255,120,100,0.7); color: #fff;
+  }
+</style>
+</head>
+<body>
+
+<!-- 开始菜单 -->
+<div id="menu-screen">
+  <div class="menu-title">3D 地球</div>
+  <div class="menu-sub">NASA BLUE MARBLE</div>
+  <button class="menu-btn" id="btn-start">开 始 游 戏</button>
+  <button class="menu-btn" id="btn-settings">设 置</button>
+</div>
+
+<!-- 选择阶段提示 -->
+<div id="select-phase-hint">点击地球选择你的国家</div>
+
+<!-- 模式切换开关 -->
+<div id="mode-toggle">
+  <span class="toggle-label">拖拽模式</span>
+  <div class="toggle-track" id="toggle-track">
+    <div class="toggle-thumb"></div>
+  </div>
+</div>
+
+<!-- 确认选择按钮 -->
+<button id="confirm-btn">确认选择</button>
+<button id="back-btn">返回</button>
+
+<!-- 预选阶段国旗 -->
+<div id="preview-gradient"></div>
+<div id="preview-flag">
+  <div id="preview-name-cn"></div>
+  <img id="preview-flag-img" src="" alt="">
+  <div id="preview-name-en"></div>
+</div>
+
+<!-- 确认后左上角国旗 -->
+<div id="flag-display"><img id="flag-img" src="" alt=""></div>
+
+<!-- 空白 UI 框 -->
+<div class="ui-box" id="ui-left-bottom">
+  <img class="lb-flag" id="lb-flag" src="" alt="">
+  <div class="lb-info">
+    <div class="lb-province" id="lb-province"></div>
+    <div class="lb-country" id="lb-country"></div>
+  </div>
+</div>
+<div class="ui-box" id="ui-right-bottom"></div>
+<div class="ui-box" id="ui-right-top">
+  <div id="time-display">
+    <span class="time-date" id="time-date">2026年1月1日</span>
+    <span class="time-clock" id="time-clock">00:00</span>
+  </div>
+  <div id="time-controls">
+    <button class="time-btn" id="btn-slower" title="减速">-</button>
+    <span id="time-speed">x1</span>
+    <button class="time-btn" id="btn-faster" title="加速">+</button>
+    <button class="time-btn" id="btn-pause" title="暂停/继续">||</button>
+  </div>
+</div>
+
+<!-- 游戏阶段：左侧信息面板 -->
+<div id="game-info"><img id="gi-img" src="" alt=""><div class="gi-name" id="gi-name"></div><div class="gi-en" id="gi-en"></div><div class="gi-divider"></div><div class="gi-stats" id="gi-stats"></div></div>
+
+<div id="zoom-distance">距离: --</div>
+
+<!-- 暂停菜单 -->
+<div id="pause-overlay">
+  <div id="pause-menu">
+    <button class="pause-btn" id="btn-resume">继 续 游 戏</button>
+    <button class="pause-btn danger" id="btn-to-menu">返 回 主 菜 单</button>
+  </div>
+</div>
+
+<div id="loading">加载高清贴图中...</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+
+// ============================================================
+// 游戏状态
+// ============================================================
+let gameState = 'menu'; // menu | selecting | playing
+let dragMode = false;
+let confirmedCountry = null;
+let earthStopped = false;
+
+// 相机动画
+let camAnim = { active: false, t: 0, from: null, to: null, dur: 1200 };
+let earthAnim = { active: false, t: 0, from: 0, to: 0, dur: 1200 };
+let earthAnimX = { active: false, t: 0, from: 0, to: 0, dur: 1200 };
+let rotAnim = { active: false, t: 0, from: 0, to: 0, dur: 1200 };
+let rotAnimX = { active: false, t: 0, from: 0, to: 0, dur: 1200 };
+
+// ============================================================
+// 场景
+// ============================================================
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+camera.position.set(0, 0.8, 5);
+
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.2;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+document.body.appendChild(renderer.domElement);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.08;
+controls.minDistance = 1.2;
+controls.maxDistance = 8;
+controls.mouseButtons = { LEFT: THREE.MOUSE.ROTATE, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: null };
+controls.target.set(0, 0, 0);
+controls.enabled = false;
+controls.update();
+
+let shiftDragging = false;
+let shiftDragLastX = 0;
+let shiftDragLastY = 0;
+let mouseNormY = 0;
+let mouseScreenX = 0.5;
+let mouseScreenY = 0.5;
+let mouseOnEarth = false;
+let globeDragging = false;
+let globeDragLastX = 0;
+let globeDragLastY = 0;
+let globeVelocityX = 0;
+let globeVelocityY = 0;
+let cameraTarget = new THREE.Vector3(0, 0, 0);
+
+renderer.domElement.addEventListener('pointerdown', (e) => {
+  if (e.button !== 0) return;
+  if (e.shiftKey && gameState === 'playing') {
+    shiftDragging = true;
+    shiftDragLastX = e.clientX;
+    shiftDragLastY = e.clientY;
+    return;
+  }
+  if (gameState === 'selecting' || gameState === 'playing') {
+    globeDragging = true;
+    globeDragLastX = e.clientX;
+    globeDragLastY = e.clientY;
+    globeVelocityX = 0;
+    globeVelocityY = 0;
+    controls.enabled = false;
+  }
+});
+
+window.addEventListener('pointermove', (e) => {
+  mouseNormY = (e.clientY / window.innerHeight) * 2 - 1;
+  mouseScreenX = e.clientX / window.innerWidth;
+  mouseScreenY = e.clientY / window.innerHeight;
+  if (shiftDragging && gameState === 'playing') {
+    const dx = e.clientX - shiftDragLastX;
+    const dy = e.clientY - shiftDragLastY;
+    earthGroup.position.x += dx * 0.005;
+    earthGroup.position.y -= dy * 0.005;
+    shiftDragLastX = e.clientX;
+    shiftDragLastY = e.clientY;
+  }
+  if (globeDragging) {
+    const dx = e.clientX - globeDragLastX;
+    const dy = e.clientY - globeDragLastY;
+    const dist = camera.position.length();
+    const sens = 0.003 * Math.pow(Math.min(1, dist / 3.5), 2);
+    globeVelocityX = dx * sens;
+    globeVelocityY = dy * sens;
+    earthGroup.rotation.y += globeVelocityX;
+    if (gameState === 'playing' || (gameState === 'selecting' && dragMode)) {
+      earthGroup.rotation.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, earthGroup.rotation.x + globeVelocityY));
+    }
+    globeDragLastX = e.clientX;
+    globeDragLastY = e.clientY;
+  }
+});
+
+window.addEventListener('pointerup', (e) => {
+  if (shiftDragging) {
+    shiftDragging = false;
+  }
+  if (globeDragging) {
+    globeDragging = false;
+    controls.enabled = false;
+  }
+});
+
+renderer.domElement.addEventListener('wheel', (e) => {
+  if (gameState !== 'playing') return;
+  e.preventDefault();
+  const dir = camera.position.clone().sub(cameraTarget).normalize();
+  const delta = e.deltaY * 0.003;
+  camera.position.addScaledVector(dir, delta);
+  const dist = camera.position.distanceTo(cameraTarget);
+  if (dist < 1.2) camera.position.copy(cameraTarget.clone().addScaledVector(dir, 1.2));
+  if (dist > 8) camera.position.copy(cameraTarget.clone().addScaledVector(dir, 8));
+  camera.lookAt(cameraTarget);
+}, { passive: false });
+
+let touchDist = 0;
+renderer.domElement.addEventListener('touchstart', (e) => {
+  if (e.touches.length === 2 && gameState === 'playing') {
+    const dx = e.touches[0].clientX - e.touches[1].clientX;
+    const dy = e.touches[0].clientY - e.touches[1].clientY;
+    touchDist = Math.sqrt(dx * dx + dy * dy);
+  }
+}, { passive: true });
+
+renderer.domElement.addEventListener('touchmove', (e) => {
+  if (e.touches.length === 2 && gameState === 'playing' && touchDist > 0) {
+    e.preventDefault();
+    const dx = e.touches[0].clientX - e.touches[1].clientX;
+    const dy = e.touches[0].clientY - e.touches[1].clientY;
+    const newDist = Math.sqrt(dx * dx + dy * dy);
+    const delta = (touchDist - newDist) * 0.005;
+    touchDist = newDist;
+    const dir = camera.position.clone().sub(cameraTarget).normalize();
+    camera.position.addScaledVector(dir, delta);
+    const dist = camera.position.distanceTo(cameraTarget);
+    if (dist < 1.2) camera.position.copy(cameraTarget.clone().addScaledVector(dir, 1.2));
+    if (dist > 8) camera.position.copy(cameraTarget.clone().addScaledVector(dir, 8));
+    camera.lookAt(cameraTarget);
+  }
+}, { passive: false });
+
+const composer = new EffectComposer(renderer);
+composer.addPass(new RenderPass(scene, camera));
+const bloomPass = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 0.5, 0.4, 0.85);
+bloomPass.threshold = 0.1; bloomPass.strength = 0.6; bloomPass.radius = 0.5;
+composer.addPass(bloomPass);
+
+// ============================================================
+// 星空
+// ============================================================
+function createStarField() {
+  const starsGeo = new THREE.BufferGeometry();
+  const count = 4000;
+  const positions = new Float32Array(count * 3);
+  const colors = new Float32Array(count * 3);
+  for (let i = 0; i < count; i++) {
+    const theta = Math.random() * Math.PI * 2;
+    const phi = Math.acos(2 * Math.random() - 1);
+    const r = 50 + Math.random() * 20;
+    positions[i*3] = r * Math.sin(phi) * Math.cos(theta);
+    positions[i*3+1] = r * Math.sin(phi) * Math.sin(theta);
+    positions[i*3+2] = r * Math.cos(phi);
+    const t = Math.random();
+    if (t < 0.6) { colors[i*3]=0.8+Math.random()*0.2; colors[i*3+1]=0.8+Math.random()*0.2; colors[i*3+2]=0.9+Math.random()*0.1; }
+    else if (t < 0.8) { colors[i*3]=0.5+Math.random()*0.3; colors[i*3+1]=0.6+Math.random()*0.3; colors[i*3+2]=0.9+Math.random()*0.1; }
+    else { colors[i*3]=0.9+Math.random()*0.1; colors[i*3+1]=0.7+Math.random()*0.2; colors[i*3+2]=0.5+Math.random()*0.3; }
+  }
+  starsGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  starsGeo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+  scene.add(new THREE.Points(starsGeo, new THREE.PointsMaterial({
+    size: 0.08, vertexColors: true, blending: THREE.AdditiveBlending,
+    depthWrite: false, transparent: true, opacity: 0.9,
+  })));
+
+  const gGeo = new THREE.BufferGeometry();
+  const gCount = 1500;
+  const gPos = new Float32Array(gCount * 3);
+  const gCol = new Float32Array(gCount * 3);
+  for (let i = 0; i < gCount; i++) {
+    const theta = Math.random() * Math.PI * 2;
+    const r = 45 + Math.random() * 15;
+    const phi = 0.8 + Math.random() * 0.4;
+    gPos[i*3] = r * Math.sin(phi) * Math.cos(theta);
+    gPos[i*3+1] = r * Math.cos(phi) + (Math.random()-0.5)*8;
+    gPos[i*3+2] = r * Math.sin(phi) * Math.sin(theta);
+    const b = 0.3 + Math.random() * 0.4;
+    gCol[i*3] = b; gCol[i*3+1] = b*0.8; gCol[i*3+2] = b*1.2;
+  }
+  gGeo.setAttribute('position', new THREE.BufferAttribute(gPos, 3));
+  gGeo.setAttribute('color', new THREE.BufferAttribute(gCol, 3));
+  scene.add(new THREE.Points(gGeo, new THREE.PointsMaterial({
+    size: 0.15, vertexColors: true, blending: THREE.AdditiveBlending,
+    depthWrite: false, transparent: true, opacity: 0.5,
+  })));
+}
+createStarField();
+
+// ============================================================
+// 地球 + 大气
+// ============================================================
+const earthGroup = new THREE.Group();
+scene.add(earthGroup);
+
+function createAtmosphere() {
+  const innerGeo = new THREE.SphereGeometry(1.08, 64, 64);
+  const innerMat = new THREE.ShaderMaterial({
+    uniforms: {},
+    vertexShader: `varying vec3 vN; varying vec3 vP;
+      void main(){vec4 w=modelMatrix*vec4(position,1.0);vN=normalize(mat3(modelMatrix)*normal);vP=w.xyz;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}`,
+    fragmentShader: `varying vec3 vN; varying vec3 vP;
+      void main(){float i=pow(0.72-dot(vN,normalize(cameraPosition-vP)),3.0);gl_FragColor=vec4(0.3,0.6,1.0,clamp(i,0.0,1.0)*0.6);}`,
+    transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.FrontSide,
+  });
+  earthGroup.add(new THREE.Mesh(innerGeo, innerMat));
+
+  const outerGeo = new THREE.SphereGeometry(1.25, 64, 64);
+  const outerMat = new THREE.ShaderMaterial({
+    uniforms: {},
+    vertexShader: `varying vec3 vN; varying vec3 vP;
+      void main(){vec4 w=modelMatrix*vec4(position,1.0);vN=normalize(mat3(modelMatrix)*normal);vP=w.xyz;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}`,
+    fragmentShader: `varying vec3 vN; varying vec3 vP;
+      void main(){float i=pow(0.68-dot(vN,normalize(cameraPosition-vP)),5.0);gl_FragColor=vec4(0.2,0.5,1.0,clamp(i,0.0,1.0)*0.25);}`,
+    transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.FrontSide,
+  });
+  earthGroup.add(new THREE.Mesh(outerGeo, outerMat));
+}
+createAtmosphere();
+
+const earthGeo = new THREE.SphereGeometry(1, 128, 128);
+
+function createBumpMap() {
+  const c = document.createElement('canvas'); c.width = 1024; c.height = 512;
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = '#808080'; ctx.fillRect(0, 0, c.width, c.height);
+  for (let i = 0; i < 20000; i++) {
+    const x = Math.random() * c.width, y = Math.random() * c.height;
+    const g = 100 + Math.random() * 60;
+    ctx.fillStyle = `rgb(${g},${g},${g})`;
+    ctx.fillRect(x, y, 3 + Math.random() * 3, 3 + Math.random() * 3);
+  }
+  ctx.fillStyle = 'rgba(220,220,220,0.5)';
+  ctx.fillRect(380, 100, 30, 300);
+  ctx.fillRect(530, 300, 20, 250);
+  ctx.fillRect(950, 170, 15, 50);
+  ctx.fillRect(750, 220, 40, 40);
+  return new THREE.CanvasTexture(c);
+}
+
+const bumpMap = createBumpMap();
+
+(() => {
+  const img = new Image();
+  const CHUNK_SIZE = 800000;
+
+  img.onload = () => {
+    const start = performance.now();
+    const cvs = document.createElement('canvas');
+    cvs.width = img.width; cvs.height = img.height;
+    const ctx = cvs.getContext('2d');
+    ctx.drawImage(img, 0, 0);
+
+    const imageData = ctx.getImageData(0, 0, cvs.width, cvs.height);
+    const d = imageData.data;
+    const totalPixels = d.length / 4;
+    let offset = 0;
+
+    function processChunk() {
+      const end = Math.min(offset + CHUNK_SIZE, totalPixels);
+      const di = offset * 4;
+      const de = end * 4;
+      for (let i = di; i < de; i += 4) {
+        const r = d[i], g = d[i + 1], b = d[i + 2];
+        const lum = 0.299 * r + 0.587 * g + 0.114 * b;
+        let f;
+        if      (lum > 220) f = 0.55;
+        else if (lum > 185) f = 0.65;
+        else if (lum > 150) f = 0.78;
+        else if (lum > 110) f = 0.90;
+        else if (lum < 35)  f = 1.20;
+        else if (lum < 70)  f = 1.08;
+        else                f = 1.0;
+        d[i] = Math.min(255, r * f);
+        d[i + 1] = Math.min(255, g * f);
+        d[i + 2] = Math.min(255, b * f);
+      }
+      offset = end;
+
+      if (offset < totalPixels) {
+        const pct = Math.round(offset / totalPixels * 100);
+        document.getElementById('loading').textContent = `亮度平衡中... ${pct}%`;
+        setTimeout(processChunk, 0);
+      } else {
+        ctx.putImageData(imageData, 0, 0);
+        const texture = new THREE.CanvasTexture(cvs);
+        texture.colorSpace = THREE.SRGBColorSpace;
+        texture.anisotropy = 8;
+
+        const earthMat = new THREE.MeshStandardMaterial({
+          map: texture, bumpMap: bumpMap, bumpScale: 0.02,
+          roughness: 0.85, metalness: 0.0,
+        });
+
+        const earth = new THREE.Mesh(earthGeo, earthMat);
+        earth.name = 'earth';
+        earthGroup.add(earth);
+
+        document.getElementById('loading').style.opacity = '0';
+        setTimeout(() => { const el = document.getElementById('loading'); if (el) el.remove(); }, 500);
+        console.log(`贴图加载完成: ${cvs.width}x${cvs.height}`);
+      }
+    }
+    processChunk();
+  };
+  img.onerror = () => { document.getElementById('loading').textContent = '贴图加载失败'; };
+  img.src = 'earth_hd.jpg';
+})();
+
+// ============================================================
+// 国境线 + 省界线 + 国名标签
+// ============================================================
+function createBorderOverlay() {
+  const countryCanvas = document.createElement('canvas');
+  countryCanvas.width = 8192; countryCanvas.height = 4096;
+  const cctx = countryCanvas.getContext('2d');
+
+  const provinceCanvas = document.createElement('canvas');
+  provinceCanvas.width = 8192; provinceCanvas.height = 4096;
+  const pctx = provinceCanvas.getContext('2d');
+
+  const countriesUrl = 'https://cdn.jsdelivr.net/gh/nvkelso/natural-earth-vector@master/geojson/ne_110m_admin_0_countries.geojson';
+  const provincesUrl = 'https://cdn.jsdelivr.net/gh/nvkelso/natural-earth-vector@master/geojson/ne_50m_admin_1_states_provinces.geojson';
+
+  Promise.all([
+    fetch(countriesUrl).then(r => r.json()),
+    fetch(provincesUrl).then(r => r.json()),
+  ])
+  .then(([countries, provinces]) => {
+
+    function toCanvas(lon, lat, w, h) {
+      return [(lon + 180) / 360 * w, (90 - lat) / 180 * h];
+    }
+
+    function drawGeoJSON(geojson, ctx, w, h) {
+      geojson.features.forEach(feature => {
+        const geom = feature.geometry;
+        if (!geom) return;
+        function drawRing(ring) {
+          if (ring.length < 2) return;
+          ctx.beginPath();
+          const [sx, sy] = toCanvas(ring[0][0], ring[0][1], w, h);
+          ctx.moveTo(sx, sy);
+          for (let i = 1; i < ring.length; i++) {
+            const [px, py] = toCanvas(ring[i][0], ring[i][1], w, h);
+            ctx.lineTo(px, py);
+          }
+          ctx.stroke();
+        }
+        if (geom.type === 'Polygon') geom.coordinates.forEach(drawRing);
+        else if (geom.type === 'MultiPolygon') geom.coordinates.forEach(poly => poly.forEach(drawRing));
+      });
+    }
+
+    pctx.strokeStyle = 'rgba(0,0,0,1.0)';
+    pctx.lineWidth = 0.9;
+    pctx.lineJoin = 'round';
+    drawGeoJSON(provinces, pctx, provinceCanvas.width, provinceCanvas.height);
+
+    // 国家颜色填充（图着色，相邻不同色）
+    const colorCanvas = document.createElement('canvas');
+    colorCanvas.width = 8192; colorCanvas.height = 4096;
+    const colorCtx = colorCanvas.getContext('2d');
+
+    function genPalette(n) {
+      const cols = [];
+      for (let i = 0; i < n; i++) {
+        const h = (i * 137.508) % 360;
+        cols.push(`hsla(${h},50%,58%,0.25)`);
+      }
+      return cols;
+    }
+    const PALETTE = genPalette(24);
+
+    const countryFeatures = countries.features.filter(f => {
+      const n = f.properties.NAME || '';
+      return n && n !== 'Antarctica';
+    });
+
+    const adj = {};
+    function getBBox(geometry) {
+      let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+      function scan(coords) {
+        for (const c of coords) {
+          if (Array.isArray(c[0])) scan(c);
+          else { minX = Math.min(minX, c[0]); maxX = Math.max(maxX, c[0]); minY = Math.min(minY, c[1]); maxY = Math.max(maxY, c[1]); }
+        }
+      }
+      scan(geometry.coordinates);
+      return { minX, maxX, minY, maxY };
+    }
+
+    const bboxes = countryFeatures.map(f => ({ name: f.properties.NAME, bbox: getBBox(f.geometry) }));
+
+    for (let i = 0; i < bboxes.length; i++) {
+      for (let j = i + 1; j < bboxes.length; j++) {
+        const a = bboxes[i], b = bboxes[j];
+        if (a.bbox.maxX < b.bbox.minX - 1 || b.bbox.maxX < a.bbox.minX - 1) continue;
+        if (a.bbox.maxY < b.bbox.minY - 1 || b.bbox.maxY < a.bbox.minY - 1) continue;
+        if (!adj[a.name]) adj[a.name] = new Set();
+        if (!adj[b.name]) adj[b.name] = new Set();
+        adj[a.name].add(b.name);
+        adj[b.name].add(a.name);
+      }
+    }
+
+    const countryColors = {};
+    const sorted = countryFeatures.map(f => f.properties.NAME).sort((a, b) => (adj[b]?.size || 0) - (adj[a]?.size || 0));
+    for (const name of sorted) {
+      const used = new Set();
+      for (const neighbor of (adj[name] || [])) {
+        if (countryColors[neighbor]) used.add(countryColors[neighbor]);
+      }
+      let ci = 0;
+      while (used.has(PALETTE[ci])) ci++;
+      countryColors[name] = PALETTE[ci % PALETTE.length];
+    }
+    countryColors['Taiwan'] = countryColors['China'];
+
+    function drawFilledGeoJSON(geojson, ctx, w, h) {
+      geojson.features.forEach(feature => {
+        const geom = feature.geometry;
+        if (!geom) return;
+        const name = feature.properties.NAME || feature.properties.name || '';
+        if (name === 'Antarctica') return;
+        ctx.fillStyle = countryColors[name] || PALETTE[0];
+        ctx.strokeStyle = 'transparent';
+        ctx.lineWidth = 0;
+        function drawRing(ring) {
+          if (ring.length < 2) return;
+          ctx.beginPath();
+          const [sx, sy] = toCanvas(ring[0][0], ring[0][1], w, h);
+          ctx.moveTo(sx, sy);
+          for (let i = 1; i < ring.length; i++) {
+            const [px, py] = toCanvas(ring[i][0], ring[i][1], w, h);
+            ctx.lineTo(px, py);
+          }
+          ctx.closePath();
+          ctx.fill();
+        }
+        if (geom.type === 'Polygon') geom.coordinates.forEach(drawRing);
+        else if (geom.type === 'MultiPolygon') geom.coordinates.forEach(poly => poly.forEach(drawRing));
+      });
+    }
+
+    drawFilledGeoJSON(countries, colorCtx, colorCanvas.width, colorCanvas.height);
+
+    const colorTex = new THREE.CanvasTexture(colorCanvas);
+    colorTex.colorSpace = THREE.SRGBColorSpace;
+    colorTex.anisotropy = 8;
+    const colorGeo = new THREE.SphereGeometry(1.004, 128, 128);
+    const colorSphere = new THREE.Mesh(colorGeo, new THREE.MeshBasicMaterial({
+      map: colorTex, transparent: true, depthTest: true, depthWrite: false,
+    }));
+    colorSphere.name = 'countryColors';
+    const oldColor = earthGroup.getObjectByName('countryColors');
+    if (oldColor) earthGroup.remove(oldColor);
+    earthGroup.add(colorSphere);
+    window.__colorSphereMat = colorSphere.material;
+
+    cctx.strokeStyle = 'rgba(0,0,0,1.0)';
+    cctx.lineWidth = 4.0;
+    cctx.lineJoin = 'round';
+    drawGeoJSON(countries, cctx, countryCanvas.width, countryCanvas.height);
+
+    const countryTex = new THREE.CanvasTexture(countryCanvas);
+    countryTex.colorSpace = THREE.SRGBColorSpace;
+    countryTex.anisotropy = 8;
+    const borderGeo = new THREE.SphereGeometry(1.005, 128, 128);
+    const countrySphere = new THREE.Mesh(borderGeo, new THREE.MeshBasicMaterial({
+      map: countryTex, transparent: true, opacity: 0.85, depthTest: true, depthWrite: false,
+    }));
+    countrySphere.name = 'countryBorders';
+    const oldC = earthGroup.getObjectByName('countryBorders');
+    if (oldC) earthGroup.remove(oldC);
+    earthGroup.add(countrySphere);
+
+    const provinceTex = new THREE.CanvasTexture(provinceCanvas);
+    provinceTex.colorSpace = THREE.SRGBColorSpace;
+    provinceTex.anisotropy = 8;
+    const provinceGeo = new THREE.SphereGeometry(1.006, 128, 128);
+    const provinceMat = new THREE.MeshBasicMaterial({
+      map: provinceTex, transparent: true, opacity: 0.0, depthTest: true, depthWrite: false,
+    });
+    const provinceSphere = new THREE.Mesh(provinceGeo, provinceMat);
+    provinceSphere.name = 'provinceBorders';
+    const oldP = earthGroup.getObjectByName('provinceBorders');
+    if (oldP) earthGroup.remove(oldP);
+    earthGroup.add(provinceSphere);
+    window.__provinceBorderMat = provinceMat;
+
+    const oldLabels = earthGroup.getObjectByName('labels');
+    if (oldLabels) earthGroup.remove(oldLabels);
+    const labelGroup = new THREE.Group();
+    labelGroup.name = 'labels';
+
+    function latLonToVec3(lat, lon, r) {
+      const phi = (90 - lat) * Math.PI / 180;
+      const theta = (lon + 180) * Math.PI / 180;
+      return new THREE.Vector3(
+        -r * Math.sin(phi) * Math.cos(theta),
+        r * Math.cos(phi),
+        r * Math.sin(phi) * Math.sin(theta)
+      );
+    }
+
+    function ringCentroid(ring) {
+      let cx = 0, cy = 0, area = 0, n = ring.length;
+      for (let i = 0; i < n - 1; i++) {
+        const x0 = ring[i][0], y0 = ring[i][1];
+        const x1 = ring[i + 1][0], y1 = ring[i + 1][1];
+        const a = x0 * y1 - x1 * y0;
+        area += a;
+        cx += (x0 + x1) * a;
+        cy += (y0 + y1) * a;
+      }
+      area /= 2;
+      if (Math.abs(area) < 1) return null;
+      return [cx / (6 * area), cy / (6 * area), Math.abs(area)];
+    }
+
+    function pointInRing(lon, lat, ring) {
+      let inside = false;
+      for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+        const xi = ring[i][0], yi = ring[i][1];
+        const xj = ring[j][0], yj = ring[j][1];
+        if ((yi > lat) !== (yj > lat) && lon < (xj - xi) * (lat - yi) / (yj - yi) + xi)
+          inside = !inside;
+      }
+      return inside;
+    }
+
+    function ensureInside(clon, clat, ring) {
+      if (pointInRing(clon, clat, ring)) return [clon, clat];
+      let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+      for (const [x, y] of ring) { minX = Math.min(minX, x); maxX = Math.max(maxX, x); minY = Math.min(minY, y); maxY = Math.max(maxY, y); }
+      let best = null, bestDist = Infinity;
+      const steps = 12;
+      for (let i = 0; i <= steps; i++) {
+        for (let j = 0; j <= steps; j++) {
+          const x = minX + (maxX - minX) * i / steps;
+          const y = minY + (maxY - minY) * j / steps;
+          if (pointInRing(x, y, ring)) {
+            const d = (x - clon) * (x - clon) + (y - clat) * (y - clat);
+            if (d < bestDist) { bestDist = d; best = [x, y]; }
+          }
+        }
+      }
+      return best || [clon, clat];
+    }
+
+    const chineseNames = {
+      'Afghanistan': '阿富汗', 'Albania': '阿尔巴尼亚', 'Algeria': '阿尔及利亚',
+      'Angola': '安哥拉', 'Argentina': '阿根廷', 'Armenia': '亚美尼亚',
+      'Australia': '澳大利亚', 'Austria': '奥地利', 'Azerbaijan': '阿塞拜疆',
+      'Bahamas': '巴哈马', 'Bangladesh': '孟加拉国', 'Belarus': '白俄罗斯',
+      'Belgium': '比利时', 'Belize': '伯利兹', 'Benin': '贝宁', 'Bhutan': '不丹',
+      'Bolivia': '玻利维亚', 'Bosnia and Herzegovina': '波黑',
+      'Botswana': '博茨瓦纳', 'Brazil': '巴西', 'Brunei': '文莱',
+      'Bulgaria': '保加利亚', 'Burkina Faso': '布基纳法索', 'Burundi': '布隆迪',
+      'Cambodia': '柬埔寨', 'Cameroon': '喀麦隆', 'Canada': '加拿大',
+      'Central African Republic': '中非', 'Chad': '乍得', 'Chile': '智利',
+      'China': '中国', 'Colombia': '哥伦比亚', 'Congo': '刚果(布)',
+      'Costa Rica': '哥斯达黎加', "Côte d'Ivoire": '科特迪瓦', 'Croatia': '克罗地亚',
+      'Cuba': '古巴', 'Cyprus': '塞浦路斯', 'Czech Republic': '捷克',
+      'Czechia': '捷克', 'Dem. Rep. Congo': '刚果(金)', 'Denmark': '丹麦',
+      'Djibouti': '吉布提', 'Dominican Republic': '多米尼加',
+      'Ecuador': '厄瓜多尔', 'Egypt': '埃及', 'El Salvador': '萨尔瓦多',
+      'Equatorial Guinea': '赤道几内亚', 'Eritrea': '厄立特里亚',
+      'Estonia': '爱沙尼亚', 'Ethiopia': '埃塞俄比亚', 'Fiji': '斐济',
+      'Finland': '芬兰', 'France': '法国', 'Gabon': '加蓬', 'Gambia': '冈比亚',
+      'Georgia': '格鲁吉亚', 'Germany': '德国', 'Ghana': '加纳',
+      'Greece': '希腊', 'Greenland': '格陵兰', 'Guatemala': '危地马拉',
+      'Guinea': '几内亚', 'Guinea-Bissau': '几内亚比绍', 'Guyana': '圭亚那',
+      'Haiti': '海地', 'Honduras': '洪都拉斯', 'Hungary': '匈牙利',
+      'Iceland': '冰岛', 'India': '印度', 'Indonesia': '印度尼西亚',
+      'Iran': '伊朗', 'Iraq': '伊拉克', 'Ireland': '爱尔兰',
+      'Israel': '以色列', 'Italy': '意大利', 'Jamaica': '牙买加',
+      'Japan': '日本', 'Jordan': '约旦', 'Kazakhstan': '哈萨克斯坦',
+      'Kenya': '肯尼亚', 'Kosovo': '科索沃', 'Kuwait': '科威特',
+      'Kyrgyzstan': '吉尔吉斯斯坦', 'Laos': '老挝', 'Latvia': '拉脱维亚',
+      'Lebanon': '黎巴嫩', 'Lesotho': '莱索托', 'Liberia': '利比里亚',
+      'Libya': '利比亚', 'Lithuania': '立陶宛', 'Luxembourg': '卢森堡',
+      'Madagascar': '马达加斯加', 'Malawi': '马拉维', 'Malaysia': '马来西亚',
+      'Mali': '马里', 'Mauritania': '毛里塔尼亚', 'Mexico': '墨西哥',
+      'Moldova': '摩尔多瓦', 'Mongolia': '蒙古', 'Montenegro': '黑山',
+      'Morocco': '摩洛哥', 'Mozambique': '莫桑比克',
+      'Myanmar': '缅甸', 'Namibia': '纳米比亚', 'Nepal': '尼泊尔',
+      'Netherlands': '荷兰', 'New Zealand': '新西兰', 'Nicaragua': '尼加拉瓜',
+      'Niger': '尼日尔', 'Nigeria': '尼日利亚', 'North Korea': '朝鲜',
+      'North Macedonia': '北马其顿', 'Norway': '挪威', 'Oman': '阿曼',
+      'Pakistan': '巴基斯坦', 'Panama': '巴拿马',
+      'Papua New Guinea': '巴布亚新几内亚', 'Paraguay': '巴拉圭',
+      'Peru': '秘鲁', 'Philippines': '菲律宾', 'Poland': '波兰',
+      'Portugal': '葡萄牙', 'Qatar': '卡塔尔', 'Republic of Serbia': '塞尔维亚',
+      'Romania': '罗马尼亚', 'Russia': '俄罗斯', 'Russian Federation': '俄罗斯',
+      'Rwanda': '卢旺达', 'Saudi Arabia': '沙特', 'Senegal': '塞内加尔',
+      'Serbia': '塞尔维亚', 'Sierra Leone': '塞拉利昂', 'Slovakia': '斯洛伐克',
+      'Slovenia': '斯洛文尼亚', 'Solomon Islands': '所罗门群岛',
+      'Somalia': '索马里', 'South Africa': '南非', 'South Korea': '韩国',
+      'South Sudan': '南苏丹', 'Spain': '西班牙', 'Sri Lanka': '斯里兰卡',
+      'Sudan': '苏丹', 'Suriname': '苏里南', 'Sweden': '瑞典',
+      'Switzerland': '瑞士', 'Syria': '叙利亚', 'Tajikistan': '塔吉克斯坦',
+      'Tanzania': '坦桑尼亚', 'Thailand': '泰国',
+      'Taiwan': '台湾',
+      'Timor-Leste': '东帝汶', 'Togo': '多哥',
+      'Trinidad and Tobago': '特立尼达', 'Tunisia': '突尼斯',
+      'Turkey': '土耳其', 'Turkmenistan': '土库曼斯坦', 'Uganda': '乌干达',
+      'Ukraine': '乌克兰', 'United Arab Emirates': '阿联酋',
+      'United Kingdom': '英国', 'United States': '美国',
+      'United States of America': '美国', 'Uruguay': '乌拉圭',
+      'Uzbekistan': '乌兹别克斯坦', 'Venezuela': '委内瑞拉',
+      'Vietnam': '越南', 'Yemen': '也门', 'Zambia': '赞比亚',
+      'Zimbabwe': '津巴布韦', 'eSwatini': '斯威士兰', 'Swaziland': '斯威士兰',
+      'W. Sahara': '西撒哈拉', 'Western Sahara': '西撒哈拉',
+      'Somaliland': '索马里兰', 'N. Cyprus': '北塞浦路斯',
+      'Federated States of Micronesia': '密克罗尼西亚',
+      'Palestine': '巴勒斯坦', 'Puerto Rico': '波多黎各',
+      'Antarctica': '南极洲',
+    };
+    window.__chineseNames = chineseNames;
+
+    const fullChineseNames = {
+      'Afghanistan': '阿富汗伊斯兰共和国', 'Albania': '阿尔巴尼亚共和国', 'Algeria': '阿尔及利亚民主人民共和国',
+      'Angola': '安哥拉共和国', 'Argentina': '阿根廷共和国', 'Armenia': '亚美尼亚共和国',
+      'Australia': '澳大利亚联邦', 'Austria': '奥地利共和国', 'Azerbaijan': '阿塞拜疆共和国',
+      'Bahamas': '巴哈马联邦', 'Bangladesh': '孟加拉人民共和国', 'Belarus': '白俄罗斯共和国',
+      'Belgium': '比利时王国', 'Belize': '伯利兹', 'Benin': '贝宁共和国', 'Bhutan': '不丹王国',
+      'Bolivia': '多民族玻利维亚国', 'Bosnia and Herzegovina': '波斯尼亚和黑塞哥维那',
+      'Botswana': '博茨瓦纳共和国', 'Brazil': '巴西联邦共和国', 'Brunei': '文莱达鲁萨兰国',
+      'Bulgaria': '保加利亚共和国', 'Burkina Faso': '布基纳法索', 'Burundi': '布隆迪共和国',
+      'Cambodia': '柬埔寨王国', 'Cameroon': '喀麦隆共和国', 'Canada': '加拿大',
+      'Central African Republic': '中非共和国', 'Chad': '乍得共和国', 'Chile': '智利共和国',
+      'China': '中华人民共和国', 'Colombia': '哥伦比亚共和国', 'Congo': '刚果共和国',
+      'Costa Rica': '哥斯达黎加共和国', "Côte d'Ivoire": '科特迪瓦共和国', 'Croatia': '克罗地亚共和国',
+      'Cuba': '古巴共和国', 'Cyprus': '塞浦路斯共和国', 'Czech Republic': '捷克共和国',
+      'Czechia': '捷克共和国', 'Dem. Rep. Congo': '刚果民主共和国', 'Denmark': '丹麦王国',
+      'Djibouti': '吉布提共和国', 'Dominican Republic': '多米尼加共和国',
+      'Ecuador': '厄瓜多尔共和国', 'Egypt': '阿拉伯埃及共和国', 'El Salvador': '萨尔瓦多共和国',
+      'Equatorial Guinea': '赤道几内亚共和国', 'Eritrea': '厄立特里亚国',
+      'Estonia': '爱沙尼亚共和国', 'Ethiopia': '埃塞俄比亚联邦民主共和国', 'Fiji': '斐济共和国',
+      'Finland': '芬兰共和国', 'France': '法兰西共和国', 'Gabon': '加蓬共和国', 'Gambia': '冈比亚共和国',
+      'Georgia': '格鲁吉亚', 'Germany': '德意志联邦共和国', 'Ghana': '加纳共和国',
+      'Greece': '希腊共和国', 'Greenland': '格陵兰', 'Guatemala': '危地马拉共和国',
+      'Guinea': '几内亚共和国', 'Guinea-Bissau': '几内亚比绍共和国', 'Guyana': '圭亚那合作共和国',
+      'Haiti': '海地共和国', 'Honduras': '洪都拉斯共和国', 'Hungary': '匈牙利',
+      'Iceland': '冰岛共和国', 'India': '印度共和国', 'Indonesia': '印度尼西亚共和国',
+      'Iran': '伊朗伊斯兰共和国', 'Iraq': '伊拉克共和国', 'Ireland': '爱尔兰',
+      'Israel': '以色列国', 'Italy': '意大利共和国', 'Jamaica': '牙买加',
+      'Japan': '日本国', 'Jordan': '约旦哈希姆王国', 'Kazakhstan': '哈萨克斯坦共和国',
+      'Kenya': '肯尼亚共和国', 'Kosovo': '科索沃', 'Kuwait': '科威特国',
+      'Kyrgyzstan': '吉尔吉斯共和国', 'Laos': '老挝人民民主共和国', 'Latvia': '拉脱维亚共和国',
+      'Lebanon': '黎巴嫩共和国', 'Lesotho': '莱索托王国', 'Liberia': '利比里亚共和国',
+      'Libya': '利比亚国', 'Lithuania': '立陶宛共和国', 'Luxembourg': '卢森堡大公国',
+      'Madagascar': '马达加斯加共和国', 'Malawi': '马拉维共和国', 'Malaysia': '马来西亚',
+      'Mali': '马里共和国', 'Mauritania': '毛里塔尼亚伊斯兰共和国', 'Mexico': '墨西哥合众国',
+      'Moldova': '摩尔多瓦共和国', 'Mongolia': '蒙古国', 'Montenegro': '黑山',
+      'Morocco': '摩洛哥王国', 'Mozambique': '莫桑比克共和国',
+      'Myanmar': '缅甸联邦共和国', 'Namibia': '纳米比亚共和国', 'Nepal': '尼泊尔联邦民主共和国',
+      'Netherlands': '荷兰王国', 'New Zealand': '新西兰', 'Nicaragua': '尼加拉瓜共和国',
+      'Niger': '尼日尔共和国', 'Nigeria': '尼日利亚联邦共和国', 'North Korea': '朝鲜民主主义人民共和国',
+      'North Macedonia': '北马其顿共和国', 'Norway': '挪威王国', 'Oman': '阿曼苏丹国',
+      'Pakistan': '巴基斯坦伊斯兰共和国', 'Panama': '巴拿马共和国',
+      'Papua New Guinea': '巴布亚新几内亚独立国', 'Paraguay': '巴拉圭共和国',
+      'Peru': '秘鲁共和国', 'Philippines': '菲律宾共和国', 'Poland': '波兰共和国',
+      'Portugal': '葡萄牙共和国', 'Qatar': '卡塔尔国', 'Republic of Serbia': '塞尔维亚共和国',
+      'Romania': '罗马尼亚', 'Russia': '俄罗斯联邦', 'Russian Federation': '俄罗斯联邦',
+      'Rwanda': '卢旺达共和国', 'Saudi Arabia': '沙特阿拉伯王国', 'Senegal': '塞内加尔共和国',
+      'Serbia': '塞尔维亚共和国', 'Sierra Leone': '塞拉利昂共和国', 'Slovakia': '斯洛伐克共和国',
+      'Slovenia': '斯洛文尼亚共和国', 'Solomon Islands': '所罗门群岛',
+      'Somalia': '索马里联邦共和国', 'South Africa': '南非共和国', 'South Korea': '大韩民国',
+      'South Sudan': '南苏丹共和国', 'Spain': '西班牙王国', 'Sri Lanka': '斯里兰卡民主社会主义共和国',
+      'Sudan': '苏丹共和国', 'Suriname': '苏里南共和国', 'Sweden': '瑞典王国',
+      'Switzerland': '瑞士联邦', 'Syria': '阿拉伯叙利亚共和国', 'Tajikistan': '塔吉克斯坦共和国',
+      'Tanzania': '坦桑尼亚联合共和国', 'Thailand': '泰王国',
+      'Timor-Leste': '东帝汶民主共和国', 'Togo': '多哥共和国',
+      'Trinidad and Tobago': '特立尼达和多巴哥共和国', 'Tunisia': '突尼斯共和国',
+      'Turkey': '土耳其共和国', 'Turkmenistan': '土库曼斯坦', 'Uganda': '乌干达共和国',
+      'Ukraine': '乌克兰', 'United Arab Emirates': '阿拉伯联合酋长国',
+      'United Kingdom': '大不列颠及北爱尔兰联合王国', 'United States': '美利坚合众国',
+      'United States of America': '美利坚合众国', 'Uruguay': '乌拉圭东岸共和国',
+      'Uzbekistan': '乌兹别克斯坦共和国', 'Venezuela': '委内瑞拉玻利瓦尔共和国',
+      'Vietnam': '越南社会主义共和国', 'Yemen': '也门共和国', 'Zambia': '赞比亚共和国',
+      'Zimbabwe': '津巴布韦共和国', 'eSwatini': '埃斯瓦蒂尼王国', 'Swaziland': '埃斯瓦蒂尼王国',
+      'W. Sahara': '阿拉伯撒哈拉民主共和国', 'Western Sahara': '阿拉伯撒哈拉民主共和国',
+      'Somaliland': '索马里兰共和国', 'N. Cyprus': '北塞浦路斯土耳其共和国',
+      'Federated States of Micronesia': '密克罗尼西亚联邦',
+      'Palestine': '巴勒斯坦国', 'Puerto Rico': '波多黎各自由邦',
+      'Antarctica': '南极洲',
+      // GeoJSON 缩写名补全
+      'Bosnia and Herz.': '波斯尼亚和黑塞哥维那', 'Central African Rep.': '中非共和国',
+      'Dominican Rep.': '多米尼加共和国', 'Eq. Guinea': '赤道几内亚共和国',
+      'Falkland Is.': '福克兰群岛', 'Fr. S. Antarctic Lands': '法国南部和南极领地',
+      'New Caledonia': '新喀里多尼亚', 'S. Sudan': '南苏丹共和国',
+      'Solomon Is.': '所罗门群岛', 'Taiwan': '中国台湾省', 'Vanuatu': '瓦努阿图共和国',
+    };
+    window.__fullChineseNames = fullChineseNames;
+
+    // 自动补全：GeoJSON 中有但 fullChineseNames 没有的国家，用 chineseNames 兜底
+    countries.features.forEach(f => {
+      const name = f.properties.NAME || '';
+      if (name && !fullChineseNames[name] && chineseNames[name]) {
+        fullChineseNames[name] = chineseNames[name];
+      }
+    });
+
+    const countryCodeMap = {
+      'Afghanistan':'AF','Albania':'AL','Algeria':'DZ','Angola':'AO','Argentina':'AR',
+      'Armenia':'AM','Australia':'AU','Austria':'AT','Azerbaijan':'AZ','Bahamas':'BS',
+      'Bangladesh':'BD','Belarus':'BY','Belgium':'BE','Belize':'BZ','Benin':'BJ',
+      'Bhutan':'BT','Bolivia':'BO','Bosnia and Herzegovina':'BA','Botswana':'BW',
+      'Brazil':'BR','Brunei':'BN','Bulgaria':'BG','Burkina Faso':'BF','Burundi':'BI',
+      'Cambodia':'KH','Cameroon':'CM','Canada':'CA','Central African Republic':'CF',
+      'Chad':'TD','Chile':'CL','China':'CN','Colombia':'CO','Congo':'CG',
+      'Costa Rica':'CR',"Côte d'Ivoire":'CI','Croatia':'HR','Cuba':'CU','Cyprus':'CY','N. Cyprus':'TR',
+      'Czech Republic':'CZ','Czechia':'CZ','Dem. Rep. Congo':'CD','Denmark':'DK',
+      'Djibouti':'DJ','Dominican Republic':'DO','Dominican Rep.':'DO','Ecuador':'EC','Egypt':'EG',
+      'El Salvador':'SV','Equatorial Guinea':'GQ','Eritrea':'ER','Estonia':'EE',
+      'Ethiopia':'ET','Fiji':'FJ','Finland':'FI','France':'FR','Fr. S. Antarctic Lands':'TF','Gabon':'GA',
+      'Gambia':'GM','Georgia':'GE','Germany':'DE','Ghana':'GH','Greece':'GR',
+      'Greenland':'GL','Guatemala':'GT','Guinea':'GN','Guinea-Bissau':'GW',
+      'Guyana':'GY','Haiti':'HT','Honduras':'HN','Hungary':'HU','Iceland':'IS',
+      'India':'IN','Indonesia':'ID','Iran':'IR','Iraq':'IQ','Ireland':'IE',
+      'Israel':'IL','Italy':'IT','Jamaica':'JM','Japan':'JP','Jordan':'JO',
+      'Kazakhstan':'KZ','Kenya':'KE','Kosovo':'XK','Kuwait':'KW',
+      'Kyrgyzstan':'KG','Laos':'LA','Latvia':'LV','Lebanon':'LB','Lesotho':'LS',
+      'Liberia':'LR','Libya':'LY','Lithuania':'LT','Luxembourg':'LU',
+      'Madagascar':'MG','Malawi':'MW','Malaysia':'MY','Mali':'ML',
+      'Mauritania':'MR','Mexico':'MX','Moldova':'MD','Mongolia':'MN',
+      'Montenegro':'ME','Morocco':'MA','Mozambique':'MZ','Myanmar':'MM',
+      'Namibia':'NA','Nepal':'NP','Netherlands':'NL','New Zealand':'NZ',
+      'Nicaragua':'NI','Niger':'NE','Nigeria':'NG','North Korea':'KP',
+      'North Macedonia':'MK','Norway':'NO','Oman':'OM','Pakistan':'PK',
+      'Panama':'PA','Papua New Guinea':'PG','Paraguay':'PY','Peru':'PE',
+      'Philippines':'PH','Poland':'PL','Portugal':'PT','Qatar':'QA',
+      'Republic of Serbia':'RS','Romania':'RO','Russia':'RU',
+      'Russian Federation':'RU','Rwanda':'RW','Saudi Arabia':'SA','Senegal':'SN',
+      'Serbia':'RS','Sierra Leone':'SL','Slovakia':'SK','Slovenia':'SI',
+      'Solomon Islands':'SB','Somalia':'SO','South Africa':'ZA','South Korea':'KR',
+      'South Sudan':'SS','Spain':'ES','Sri Lanka':'LK','Sudan':'SD',
+      'Suriname':'SR','Sweden':'SE','Switzerland':'CH','Syria':'SY',
+      'Tajikistan':'TJ','Tanzania':'TZ','Thailand':'TH','Timor-Leste':'TL',
+      'Togo':'TG','Trinidad and Tobago':'TT','Tunisia':'TN','Turkey':'TR',
+      'Turkmenistan':'TM','Uganda':'UG','Ukraine':'UA',
+      'United Arab Emirates':'AE','United Kingdom':'GB','United States':'US',
+      'United States of America':'US','Uruguay':'UY','Uzbekistan':'UZ',
+      'Venezuela':'VE','Vietnam':'VN','Yemen':'YE','Zambia':'ZM',
+      'Zimbabwe':'ZW','eSwatini':'SZ','Swaziland':'SZ','W. Sahara':'EH',
+      'Western Sahara':'EH','Palestine':'PS','Puerto Rico':'PR',
+    };
+    window.__countryCodeMap = countryCodeMap;
+
+    const allLabels = [];
+    const candidates = [];
+    countries.features.forEach(feature => {
+      const name = feature.properties.NAME || feature.properties.name || '';
+      if (!name || name === 'Antarctica' || name === 'Taiwan') return;
+      const geom = feature.geometry;
+      if (!geom) return;
+      let bestCentroid = null, bestArea = 0, bestRing = null;
+      const rings = [];
+      if (geom.type === 'Polygon') rings.push(geom.coordinates[0]);
+      else if (geom.type === 'MultiPolygon') geom.coordinates.forEach(p => rings.push(p[0]));
+      for (const ring of rings) {
+        const c = ringCentroid(ring);
+        if (c && c[2] > bestArea) { bestArea = c[2]; bestCentroid = c; bestRing = ring; }
+      }
+      if (!bestCentroid || bestArea < 1) return;
+      const [clon, clat] = ensureInside(bestCentroid[0], bestCentroid[1], bestRing);
+      candidates.push({ name, clon, clat, bestArea });
+    });
+    const maxArea = Math.max(...candidates.map(c => c.bestArea));
+
+    candidates.forEach(({ name, clon, clat, bestArea }) => {
+      const logFrac = Math.log(bestArea + 1) / Math.log(maxArea + 1);
+      const scale = 0.05 + 0.95 * Math.pow(logFrac, 0.6);
+      const geoW = 0.5 * scale;
+      const geoH = 0.075 * scale;
+
+      const displayName = chineseNames[name] || name;
+      const labelCanvas = document.createElement('canvas');
+      labelCanvas.width = 512; labelCanvas.height = 64;
+      const lctx = labelCanvas.getContext('2d');
+      const areaScore = Math.log(bestArea + 1) / Math.log(maxArea + 1);
+      const fontSize = areaScore <= 0.25
+        ? Math.round(10 + 28 * Math.sqrt(scale))
+        : Math.round(20 + 40 * Math.sqrt(scale));
+      lctx.font = `bold ${fontSize}px "Microsoft YaHei", "PingFang SC", "Noto Sans SC", sans-serif`;
+      lctx.textAlign = 'center';
+      lctx.textBaseline = 'middle';
+      lctx.fillStyle = 'rgba(140,165,195,0.65)';
+      lctx.fillText(displayName, 256, 32);
+
+      const LABEL_R = 1.013;
+      const sH = 4, sW = Math.max(2, Math.round(4 * geoW / geoH));
+      const flatGeo = new THREE.PlaneGeometry(geoW, geoH, sW, sH);
+      const fPos = flatGeo.attributes.position;
+      for (let i = 0; i < fPos.count; i++) {
+        const x = fPos.getX(i), y = fPos.getY(i);
+        const d = Math.sqrt(x*x + y*y + LABEL_R*LABEL_R);
+        fPos.setXYZ(i, x * LABEL_R / d, y * LABEL_R / d, LABEL_R * LABEL_R / d - LABEL_R);
+      }
+      flatGeo.computeVertexNormals();
+
+      const labelMat = new THREE.MeshBasicMaterial({
+        map: new THREE.CanvasTexture(labelCanvas),
+        transparent: true, side: THREE.DoubleSide, depthTest: true, depthWrite: false,
+      });
+      const labelMesh = new THREE.Mesh(flatGeo, labelMat);
+
+      const pos = latLonToVec3(clat, clon, 1.013);
+      labelMesh.position.copy(pos);
+      const normal = pos.clone().normalize();
+      const worldUp = new THREE.Vector3(0, 1, 0);
+      if (Math.abs(normal.dot(worldUp)) > 0.999) {
+        labelMesh.lookAt(pos.clone().add(new THREE.Vector3(0, 0, 1)));
+      } else {
+        const east = new THREE.Vector3().crossVectors(worldUp, normal).normalize();
+        const north = new THREE.Vector3().crossVectors(normal, east).normalize();
+        labelMesh.setRotationFromMatrix(new THREE.Matrix4().makeBasis(east, north, normal));
+      }
+      labelGroup.add(labelMesh);
+      allLabels.push({ mesh: labelMesh, area: bestArea });
+    });
+
+    earthGroup.add(labelGroup);
+    window.__allLabels = allLabels;
+    window.__maxLabelArea = maxArea;
+    window.__countriesGeoJSON = countries;
+    window.__provincesGeoJSON = provinces;
+
+    // 省级行政区标签
+    const provinceLabels = [];
+    const provLabelGroup = new THREE.Group();
+    provLabelGroup.name = 'provinceLabels';
+
+    provinces.features.forEach(feature => {
+      const name = feature.properties.name || '';
+      if (!name) return;
+      const geom = feature.geometry;
+      if (!geom) return;
+      let bestCentroid = null, bestArea = 0, bestRing = null;
+      const rings = [];
+      if (geom.type === 'Polygon') rings.push(geom.coordinates[0]);
+      else if (geom.type === 'MultiPolygon') geom.coordinates.forEach(p => rings.push(p[0]));
+      for (const ring of rings) {
+        const c = ringCentroid(ring);
+        if (c && c[2] > bestArea) { bestArea = c[2]; bestCentroid = c; bestRing = ring; }
+      }
+      if (!bestCentroid || bestArea < 0.5) return;
+      const [clon, clat] = ensureInside(bestCentroid[0], bestCentroid[1], bestRing);
+
+      const displayName = chineseProvinceNames[name] || name;
+      const labelCanvas = document.createElement('canvas');
+      labelCanvas.width = 512; labelCanvas.height = 64;
+      const lctx = labelCanvas.getContext('2d');
+      const logFrac = Math.log(bestArea + 1) / Math.log(maxArea + 1);
+      const scale = 0.3 + 0.7 * Math.pow(logFrac, 0.5);
+      const fontSize = Math.round(16 + 20 * Math.sqrt(scale));
+      lctx.font = `${fontSize}px "Microsoft YaHei", "PingFang SC", "Noto Sans SC", sans-serif`;
+      lctx.textAlign = 'center';
+      lctx.textBaseline = 'middle';
+      lctx.fillStyle = 'rgba(0,0,0,0.95)';
+      lctx.fillText(displayName, 256, 32);
+
+      const LABEL_R = 1.014;
+      const geoW = 0.25 * scale;
+      const geoH = 0.04 * scale;
+      const sH = 2, sW = Math.max(2, Math.round(4 * geoW / geoH));
+      const flatGeo = new THREE.PlaneGeometry(geoW, geoH, sW, sH);
+      const fPos = flatGeo.attributes.position;
+      for (let i = 0; i < fPos.count; i++) {
+        const x = fPos.getX(i), y = fPos.getY(i);
+        const d = Math.sqrt(x*x + y*y + LABEL_R*LABEL_R);
+        fPos.setXYZ(i, x * LABEL_R / d, y * LABEL_R / d, LABEL_R * LABEL_R / d - LABEL_R);
+      }
+      flatGeo.computeVertexNormals();
+
+      const labelMat = new THREE.MeshBasicMaterial({
+        map: new THREE.CanvasTexture(labelCanvas),
+        transparent: true, side: THREE.DoubleSide, depthTest: true, depthWrite: false,
+      });
+      const labelMesh = new THREE.Mesh(flatGeo, labelMat);
+
+      const pos = latLonToVec3(clat, clon, LABEL_R);
+      labelMesh.position.copy(pos);
+      const normal = pos.clone().normalize();
+      const worldUp = new THREE.Vector3(0, 1, 0);
+      if (Math.abs(normal.dot(worldUp)) > 0.999) {
+        labelMesh.lookAt(pos.clone().add(new THREE.Vector3(0, 0, 1)));
+      } else {
+        const east = new THREE.Vector3().crossVectors(worldUp, normal).normalize();
+        const north = new THREE.Vector3().crossVectors(normal, east).normalize();
+        labelMesh.setRotationFromMatrix(new THREE.Matrix4().makeBasis(east, north, normal));
+      }
+      labelMesh.visible = false;
+      provLabelGroup.add(labelMesh);
+      provinceLabels.push({ mesh: labelMesh });
+    });
+
+    const twFeature = countries.features.find(f => f.properties.NAME === 'Taiwan');
+    if (twFeature) {
+      const geom = twFeature.geometry;
+      let cx = 0, cy = 0, cnt = 0;
+      function scanCoords(coords) {
+        for (const c of coords) {
+          if (Array.isArray(c[0])) scanCoords(c);
+          else { cx += c[0]; cy += c[1]; cnt++; }
+        }
+      }
+      if (geom.type === 'Polygon') geom.coordinates.forEach(scanCoords);
+      else if (geom.type === 'MultiPolygon') geom.coordinates.forEach(p => p.forEach(scanCoords));
+      if (cnt > 0) {
+        const twLon = cx / cnt, twLat = cy / cnt;
+        const twCanvas = document.createElement('canvas');
+        twCanvas.width = 512; twCanvas.height = 64;
+        const twCtx = twCanvas.getContext('2d');
+        twCtx.font = '14px "Microsoft YaHei", "PingFang SC", "Noto Sans SC", sans-serif';
+        twCtx.textAlign = 'center';
+        twCtx.textBaseline = 'middle';
+        twCtx.fillStyle = 'rgba(0,0,0,0.95)';
+        twCtx.fillText('台湾省', 256, 32);
+        const twLabelR = 1.014;
+        const twGeoW = 0.12, twGeoH = 0.03;
+        const flatGeo = new THREE.PlaneGeometry(twGeoW, twGeoH, 2, 2);
+        const fPos = flatGeo.attributes.position;
+        for (let i = 0; i < fPos.count; i++) {
+          const x = fPos.getX(i), y = fPos.getY(i);
+          const d = Math.sqrt(x*x + y*y + twLabelR*twLabelR);
+          fPos.setXYZ(i, x * twLabelR / d, y * twLabelR / d, twLabelR * twLabelR / d - twLabelR);
+        }
+        flatGeo.computeVertexNormals();
+        const twLabelMat = new THREE.MeshBasicMaterial({
+          map: new THREE.CanvasTexture(twCanvas),
+          transparent: true, side: THREE.DoubleSide, depthTest: true, depthWrite: false,
+        });
+        const twLabelMesh = new THREE.Mesh(flatGeo, twLabelMat);
+        const pos = latLonToVec3(twLat, twLon, twLabelR);
+        twLabelMesh.position.copy(pos);
+        const normal = pos.clone().normalize();
+        const worldUp = new THREE.Vector3(0, 1, 0);
+        const east = new THREE.Vector3().crossVectors(worldUp, normal).normalize();
+        const north = new THREE.Vector3().crossVectors(normal, east).normalize();
+        twLabelMesh.setRotationFromMatrix(new THREE.Matrix4().makeBasis(east, north, normal));
+        twLabelMesh.visible = false;
+        provLabelGroup.add(twLabelMesh);
+        provinceLabels.push({ mesh: twLabelMesh });
+      }
+    }
+
+    earthGroup.add(provLabelGroup);
+    window.__provinceLabels = provinceLabels;
+  })
+  .catch(err => { console.warn('边界数据加载失败:', err); });
+}
+createBorderOverlay();
+
+// ============================================================
+// 国家选取系统
+// ============================================================
+const raycaster = new THREE.Raycaster();
+const mouse = new THREE.Vector2();
+let mouseDown = new THREE.Vector2();
+let selectedCountry = null;
+
+const highlightCanvas = document.createElement('canvas');
+highlightCanvas.width = 4096; highlightCanvas.height = 2048;
+const hctx = highlightCanvas.getContext('2d');
+const highlightTex = new THREE.CanvasTexture(highlightCanvas);
+highlightTex.colorSpace = THREE.SRGBColorSpace;
+const highlightSphere = new THREE.Mesh(
+  new THREE.SphereGeometry(1.008, 128, 128),
+  new THREE.MeshBasicMaterial({ map: highlightTex, transparent: true, opacity: 0.7, depthTest: true, depthWrite: false })
+);
+highlightSphere.name = 'highlight';
+highlightSphere.visible = false;
+earthGroup.add(highlightSphere);
+window.__highlightMat = highlightSphere.material;
+
+function toCanvasCoord(lon, lat, w, h) {
+  return [(lon + 180) / 360 * w, (90 - lat) / 180 * h];
+}
+
+function vec3ToLatLon(pos) {
+  earthGroup.updateMatrixWorld(true);
+  const local = pos.clone().applyMatrix4(new THREE.Matrix4().copy(earthGroup.matrixWorld).invert());
+  const n = local.normalize();
+  const lat = Math.asin(n.y) * 180 / Math.PI;
+  const lon = Math.atan2(-n.z, n.x) * 180 / Math.PI;
+  return { lat, lon };
+}
+
+function pointInFeature(lon, lat, feature) {
+  const geom = feature.geometry;
+  if (!geom) return false;
+  function checkRing(ring) {
+    let inside = false;
+    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+      const xi = ring[i][0], yi = ring[i][1];
+      const xj = ring[j][0], yj = ring[j][1];
+      if ((yi > lat) !== (yj > lat) && lon < (xj - xi) * (lat - yi) / (yj - yi) + xi) inside = !inside;
+    }
+    return inside;
+  }
+  if (geom.type === 'Polygon') return geom.coordinates.some(checkRing);
+  if (geom.type === 'MultiPolygon') return geom.coordinates.some(poly => poly.some(checkRing));
+  return false;
+}
+
+const chineseProvinceNames = {
+  'Anhui': '安徽省', 'Beijing': '北京市', 'Chongqing': '重庆市',
+  'Fujian': '福建省', 'Gansu': '甘肃省', 'Guangdong': '广东省',
+  'Guangxi': '广西', 'Guizhou': '贵州省', 'Hainan': '海南省',
+  'Hebei': '河北省', 'Heilongjiang': '黑龙江省', 'Henan': '河南省',
+  'Hong Kong': '香港', 'Hubei': '湖北省', 'Hunan': '湖南省',
+  'Inner Mongol': '内蒙古', 'Jiangsu': '江苏省', 'Jiangxi': '江西省',
+  'Jilin': '吉林省', 'Liaoning': '辽宁省', 'Macau': '澳门',
+  'Ningxia': '宁夏', 'Qinghai': '青海省', 'Shaanxi': '陕西省',
+  'Shandong': '山东省', 'Shanghai': '上海市', 'Shanxi': '山西省',
+  'Sichuan': '四川省', 'Tianjin': '天津市',
+  'Tibet': '西藏', 'Xinjiang': '新疆', 'Yunnan': '云南省',
+  'Zhejiang': '浙江省',
+  'Taiwan': '台湾省',
+  'California': '加利福尼亚', 'Texas': '得克萨斯', 'New York': '纽约州',
+  'Florida': '佛罗里达', 'Washington': '华盛顿州', 'Alaska': '阿拉斯加',
+  'Tokyo': '东京都', 'Hokkaido': '北海道', 'Osaka': '大阪府', 'Kyoto': '京都府',
+  'Moscow': '莫斯科州', 'Primorye': '滨海边疆区',
+  'England': '英格兰', 'Scotland': '苏格兰', 'Wales': '威尔士',
+  'Île-de-France': '法兰西岛',
+};
+
+function getProvinceAt(lon, lat) {
+  const geo = window.__provincesGeoJSON;
+  if (!geo) return null;
+  for (const feature of geo.features) {
+    if (!feature.properties.name) continue;
+    if (pointInFeature(lon, lat, feature)) return feature;
+  }
+  return null;
+}
+
+function getCountryAt(lon, lat) {
+  const geo = window.__countriesGeoJSON;
+  if (!geo) return null;
+  let chinaFeature = null;
+  for (const feature of geo.features) {
+    const name = feature.properties.NAME || '';
+    if (!name || name === 'Antarctica') continue;
+    if (name === 'China') chinaFeature = feature;
+    if (pointInFeature(lon, lat, feature)) {
+      if (name === 'Taiwan') return chinaFeature;
+      return feature;
+    }
+  }
+  return null;
+}
+
+function drawHighlight(feature) {
+  const w = highlightCanvas.width, hh = highlightCanvas.height;
+  hctx.clearRect(0, 0, w, hh);
+  if (!feature) { highlightTex.needsUpdate = true; return; }
+
+  const geom = feature.geometry;
+  function drawPolygonRing(ring) {
+    if (ring.length < 2) return;
+    hctx.beginPath();
+    const [sx, sy] = toCanvasCoord(ring[0][0], ring[0][1], w, hh);
+    hctx.moveTo(sx, sy);
+    for (let i = 1; i < ring.length; i++) {
+      const [px, py] = toCanvasCoord(ring[i][0], ring[i][1], w, hh);
+      hctx.lineTo(px, py);
+    }
+    hctx.closePath();
+    hctx.fillStyle = 'rgba(255,255,255,0.1)';
+    hctx.fill();
+    hctx.strokeStyle = 'rgba(255,255,255,0.4)';
+    hctx.lineWidth = 1.8;
+    hctx.lineJoin = 'round';
+    hctx.stroke();
+  }
+
+  if (geom.type === 'Polygon') geom.coordinates.forEach(drawPolygonRing);
+  else if (geom.type === 'MultiPolygon') geom.coordinates.forEach(poly => poly.forEach(drawPolygonRing));
+
+  if (feature.properties.NAME === 'China') {
+    const tw = (window.__countriesGeoJSON?.features || []).find(f => f.properties.NAME === 'Taiwan');
+    if (tw) {
+      const twGeom = tw.geometry;
+      if (twGeom.type === 'Polygon') twGeom.coordinates.forEach(drawPolygonRing);
+      else if (twGeom.type === 'MultiPolygon') twGeom.coordinates.forEach(poly => poly.forEach(drawPolygonRing));
+    }
+  }
+
+  highlightTex.needsUpdate = true;
+}
+
+function getFlagUrl(enName) {
+  const code = window.__countryCodeMap?.[enName];
+  return code ? `https://flagcdn.com/w640/${code.toLowerCase()}.png` : '';
+}
+
+const flagDisplayEl = document.getElementById('flag-display');
+const flagImgEl = document.getElementById('flag-img');
+const previewFlagEl = document.getElementById('preview-flag');
+const previewGradientEl = document.getElementById('preview-gradient');
+const previewFlagImgEl = document.getElementById('preview-flag-img');
+const confirmBtnEl = document.getElementById('confirm-btn');
+const gameInfoEl = document.getElementById('game-info');
+
+function selectRegion(feature, level) {
+  if (!feature) {
+    selectedCountry = null;
+    highlightSphere.visible = false;
+    if (gameState === 'selecting') {
+      previewFlagEl.classList.add('sink');
+      previewFlagEl.classList.remove('visible');
+      previewGradientEl.classList.add('sink');
+      previewGradientEl.classList.remove('visible');
+      confirmBtnEl.classList.remove('visible');
+      if (mouseOnEarth) {
+        const targetRotX = -(mouseNormY) * 0.3;
+        earthGroup.rotation.x += (targetRotX - earthGroup.rotation.x) * 0.12;
+      } else {
+        earthGroup.rotation.x *= 0.88;
+        if (Math.abs(earthGroup.rotation.x) < 0.001) earthGroup.rotation.x = 0;
+      }
+    }
+    if (gameState === 'playing') {
+      document.getElementById('ui-left-bottom').classList.remove('visible');
+    }
+    return;
+  }
+
+  let enName, cnName, adminName;
+  if (level === 'province') {
+    const name = feature.properties.name || feature.properties.NAME || '';
+    adminName = feature.properties.admin || feature.properties.NAME || '';
+    cnName = chineseProvinceNames[name] || window.__chineseNames?.[adminName] || name || adminName;
+    enName = name || adminName;
+  } else {
+    enName = feature.properties.NAME || '';
+    cnName = window.__chineseNames?.[enName] || enName;
+    adminName = enName;
+  }
+
+  selectedCountry = { cnName, enName: adminName, feature, level };
+  if (gameState === 'selecting') earthStopped = true;
+
+  if (gameState === 'selecting') {
+    const cnAdmin = level === 'province' ? (window.__chineseNames?.[adminName] || adminName) : (window.__fullChineseNames?.[adminName] || window.__chineseNames?.[adminName] || adminName);
+    const code = window.__countryCodeMap?.[adminName] || '';
+    // 英文名标准化：去掉 GeoJSON 里的冗长后缀
+    const enShortNames = {
+      'United States of America': 'United States', 'Russian Federation': 'Russia',
+      'Dem. Rep. Congo': 'DR Congo', 'Central African Republic': 'CAR',
+      'Bosnia and Herzegovina': 'Bosnia', 'North Macedonia': 'N. Macedonia',
+      'Trinidad and Tobago': 'Trinidad & Tobago', 'Equatorial Guinea': 'Eq. Guinea',
+      'Papua New Guinea': 'Papua New Guinea', 'Solomon Islands': 'Sol. Islands',
+      'El Salvador': 'El Salvador', 'Costa Rica': 'Costa Rica',
+      'Dominican Republic': 'Dominican Rep.', 'United Arab Emirates': 'UAE',
+      'United Kingdom': 'UK', 'South Africa': 'S. Africa',
+      'South Sudan': 'S. Sudan', 'Saudi Arabia': 'Saudi Arabia',
+      'Sri Lanka': 'Sri Lanka', 'Federated States of Micronesia': 'Micronesia',
+      'Guinea-Bissau': 'Guinea-Bissau', 'Burkina Faso': 'Burkina Faso',
+      'Sierra Leone': 'Sierra Leone', 'Saint Kitts and Nevis': 'St. Kitts & Nevis',
+      'Antigua and Barbuda': 'Antigua & Barbuda',
+    };
+    const displayName = enShortNames[adminName] || adminName;
+    const enText = code ? `${displayName} (${code})` : displayName;
+
+    if (previewFlagEl.classList.contains('visible')) {
+      previewFlagImgEl.classList.add('switching');
+      document.getElementById('preview-name-cn').classList.add('switching');
+      document.getElementById('preview-name-en').classList.add('switching');
+      setTimeout(() => {
+        previewFlagImgEl.src = getFlagUrl(adminName);
+        previewFlagImgEl.style.display = previewFlagImgEl.src ? 'block' : 'none';
+        document.getElementById('preview-name-cn').textContent = cnAdmin;
+        document.getElementById('preview-name-en').textContent = enText;
+        previewFlagImgEl.classList.remove('switching');
+        document.getElementById('preview-name-cn').classList.remove('switching');
+        document.getElementById('preview-name-en').classList.remove('switching');
+      }, 200);
+    } else {
+      previewFlagImgEl.src = getFlagUrl(adminName);
+      previewFlagImgEl.style.display = previewFlagImgEl.src ? 'block' : 'none';
+      document.getElementById('preview-name-cn').textContent = cnAdmin;
+      document.getElementById('preview-name-en').textContent = enText;
+      previewFlagEl.classList.remove('sink');
+      previewFlagEl.classList.add('visible');
+      previewGradientEl.classList.remove('sink');
+      previewGradientEl.classList.add('visible');
+    }
+    confirmBtnEl.classList.add('visible');
+  }
+
+  if (gameState === 'playing') {
+    const giImg = document.getElementById('gi-img');
+    const giNameEl = document.getElementById('gi-name');
+    const giEnEl = document.getElementById('gi-en');
+    giImg.src = getFlagUrl(adminName);
+    giImg.style.display = giImg.src ? 'block' : 'none';
+    giNameEl.textContent = cnName;
+    giEnEl.textContent = adminName;
+
+    const lbBox = document.getElementById('ui-left-bottom');
+    if (level === 'province') {
+      const lbFlag = document.getElementById('lb-flag');
+      const lbProvince = document.getElementById('lb-province');
+      const lbCountry = document.getElementById('lb-country');
+      lbFlag.src = getFlagUrl(adminName);
+      lbFlag.style.display = lbFlag.src ? 'block' : 'none';
+      const cnAdmin = window.__chineseNames?.[adminName] || adminName;
+      lbProvince.textContent = cnName;
+      lbCountry.textContent = cnAdmin;
+      lbBox.classList.add('visible');
+    } else {
+      lbBox.classList.remove('visible');
+    }
+  }
+
+  drawHighlight(feature);
+  highlightSphere.visible = true;
+}
+
+// ============================================================
+// 菜单 & 游戏状态控制
+// ============================================================
+const menuScreen = document.getElementById('menu-screen');
+const selectHint = document.getElementById('select-phase-hint');
+
+function enterSelecting() {
+  gameState = 'selecting';
+  earthStopped = false;
+  menuScreen.classList.add('hidden');
+  selectHint.classList.add('visible');
+  backBtnEl.classList.add('visible');
+  document.getElementById('mode-toggle').classList.add('visible');
+
+  earthAnim.from = earthGroup.position.x;
+  earthAnim.to = 0.9;
+  earthAnim.t = 0;
+  earthAnim.lastTick = performance.now();
+  earthAnim.active = true;
+
+  camAnim.from = camera.position.clone();
+  camAnim.to = new THREE.Vector3(0, 0.3, 2.5);
+  camAnim.t = 0;
+  camAnim.lastTick = performance.now();
+  camAnim.active = true;
+  controls.enabled = false;
+}
+
+function confirmSelection() {
+  if (!selectedCountry) return;
+  gameState = 'playing';
+  confirmedCountry = { ...selectedCountry };
+  backBtnEl.classList.remove('visible');
+  document.getElementById('mode-toggle').classList.remove('visible');
+
+  earthAnim.from = earthGroup.position.x;
+  earthAnim.to = 0;
+  earthAnim.t = 0;
+  earthAnim.lastTick = performance.now();
+  earthAnim.active = true;
+
+  // 计算选中国家的经纬度，旋转地球使其对准镜头
+  const feature = confirmedCountry.feature;
+  if (feature && feature.geometry) {
+    let cx = 0, cy = 0, cnt = 0;
+    function scanCoords(coords) {
+      for (const c of coords) {
+        if (Array.isArray(c[0])) scanCoords(c);
+        else { cx += c[0]; cy += c[1]; cnt++; }
+      }
+    }
+    scanCoords(feature.geometry.coordinates);
+    if (cnt > 0) {
+      const avgLon = cx / cnt;
+      const avgLat = cy / cnt;
+
+      // Y轴：经度对准
+      const targetRotY = -(avgLon + 90) * Math.PI / 180;
+      let diffY = targetRotY - (earthGroup.rotation.y % (Math.PI * 2));
+      if (diffY > Math.PI) diffY -= Math.PI * 2;
+      if (diffY < -Math.PI) diffY += Math.PI * 2;
+      rotAnim.from = earthGroup.rotation.y;
+      rotAnim.to = earthGroup.rotation.y + diffY;
+      rotAnim.t = 0;
+      rotAnim.lastTick = performance.now();
+      rotAnim.active = true;
+
+      // X轴：纬度对准
+      const targetRotX = avgLat * Math.PI / 180;
+      rotAnimX.from = earthGroup.rotation.x;
+      rotAnimX.to = targetRotX;
+      rotAnimX.t = 0;
+      rotAnimX.lastTick = performance.now();
+      rotAnimX.active = true;
+    }
+  }
+
+  selectHint.classList.remove('visible');
+  confirmBtnEl.classList.remove('visible');
+
+  previewFlagEl.classList.remove('visible');
+  previewFlagEl.classList.add('sink');
+  previewGradientEl.classList.remove('visible');
+  previewGradientEl.classList.add('sink');
+
+  flagImgEl.src = getFlagUrl(confirmedCountry.enName);
+  flagImgEl.style.display = flagImgEl.src ? 'block' : 'none';
+  flagDisplayEl.classList.add('visible');
+
+  document.getElementById('ui-right-bottom').classList.add('visible');
+  document.getElementById('ui-right-top').classList.add('visible');
+
+  if (confirmedCountry.level === 'province') {
+    const lbFlag = document.getElementById('lb-flag');
+    const lbProvince = document.getElementById('lb-province');
+    const lbCountry = document.getElementById('lb-country');
+    lbFlag.src = getFlagUrl(confirmedCountry.enName);
+    lbFlag.style.display = lbFlag.src ? 'block' : 'none';
+    const cnAdmin = window.__chineseNames?.[confirmedCountry.enName] || confirmedCountry.enName;
+    lbProvince.textContent = confirmedCountry.cnName;
+    lbCountry.textContent = cnAdmin;
+    document.getElementById('ui-left-bottom').classList.add('visible');
+  }
+
+  const giImg = document.getElementById('gi-img');
+  const giName = document.getElementById('gi-name');
+  const giEn = document.getElementById('gi-en');
+  const giStats = document.getElementById('gi-stats');
+
+  giImg.src = getFlagUrl(confirmedCountry.enName);
+  giImg.style.display = giImg.src ? 'block' : 'none';
+  giName.textContent = confirmedCountry.cnName;
+  giEn.textContent = confirmedCountry.enName;
+  giStats.innerHTML = `坐标: 自由探索<br>状态: 已确认`;
+}
+
+// ============================================================
+// 时间系统
+// ============================================================
+const TIME_SLOTS = ['00:00','03:00','06:00','09:00','12:00','15:00','18:00','21:00'];
+const SPEED_LEVELS = [0, 1, 2, 4, 8, 16];
+const SPEED_LABELS = ['x0','x1','x2','x4','x8','x16'];
+let timeYear = 2026, timeMonth = 1, timeDay = 1;
+let timeSlotIndex = 0;
+let speedIndex = 1;
+let timeRunning = false;
+let timeAccum = 0;
+
+const timeDateEl = document.getElementById('time-date');
+const timeClockEl = document.getElementById('time-clock');
+const timeSpeedEl = document.getElementById('time-speed');
+const btnPause = document.getElementById('btn-pause');
+
+function updateTimeDisplay() {
+  timeDateEl.textContent = `${timeYear}年${timeMonth}月${timeDay}日`;
+  timeClockEl.textContent = TIME_SLOTS[timeSlotIndex];
+}
+
+function daysInMonth(y, m) {
+  return new Date(y, m, 0).getDate();
+}
+
+function advanceTime() {
+  timeSlotIndex++;
+  if (timeSlotIndex >= TIME_SLOTS.length) {
+    timeSlotIndex = 0;
+    timeDay++;
+    if (timeDay > daysInMonth(timeYear, timeMonth)) {
+      timeDay = 1;
+      timeMonth++;
+      if (timeMonth > 12) {
+        timeMonth = 1;
+        timeYear++;
+      }
+    }
+  }
+  updateTimeDisplay();
+}
+
+function setTimeSpeed(idx) {
+  speedIndex = Math.max(0, Math.min(SPEED_LEVELS.length - 1, idx));
+  timeRunning = speedIndex > 0;
+  timeSpeedEl.textContent = SPEED_LABELS[speedIndex];
+  btnPause.classList.toggle('active', !timeRunning);
+  btnPause.textContent = timeRunning ? '||' : '>';
+}
+
+document.getElementById('btn-faster').addEventListener('click', () => setTimeSpeed(speedIndex + 1));
+document.getElementById('btn-slower').addEventListener('click', () => setTimeSpeed(speedIndex - 1));
+btnPause.addEventListener('click', () => {
+  if (timeRunning) { setTimeSpeed(0); }
+  else { setTimeSpeed(1); }
+});
+
+window.addEventListener('keydown', (e) => {
+  if (e.code === 'Space' && gameState === 'playing') {
+    e.preventDefault();
+    if (timeRunning) setTimeSpeed(0);
+    else setTimeSpeed(1);
+  }
+});
+
+let lastTimeTick = performance.now();
+function tickTime(now) {
+  if (timeRunning && SPEED_LEVELS[speedIndex] > 0) {
+    timeAccum += now - lastTimeTick;
+    const interval = 1000 / SPEED_LEVELS[speedIndex];
+    while (timeAccum >= interval) {
+      timeAccum -= interval;
+      advanceTime();
+    }
+  }
+  lastTimeTick = now;
+}
+
+updateTimeDisplay();
+
+document.getElementById('btn-start').addEventListener('click', enterSelecting);
+document.getElementById('btn-settings').addEventListener('click', () => {
+  alert('设置功能开发中...');
+});
+
+document.getElementById('mode-toggle').addEventListener('click', () => {
+  dragMode = !dragMode;
+  document.getElementById('toggle-track').classList.toggle('on', dragMode);
+});
+
+document.getElementById('lb-flag').addEventListener('click', () => {
+  if (gameState !== 'playing') return;
+  gameInfoEl.classList.toggle('visible');
+});
+
+// 暂停菜单
+const pauseOverlay = document.getElementById('pause-overlay');
+const flagDisplayClickEl = document.getElementById('flag-display');
+flagDisplayClickEl.style.pointerEvents = 'auto';
+flagDisplayClickEl.style.cursor = 'pointer';
+let pausedGameState = null;
+
+flagDisplayClickEl.addEventListener('click', () => {
+  if (gameState !== 'playing') return;
+  pausedGameState = 'playing';
+  pauseOverlay.classList.add('visible');
+});
+
+document.getElementById('btn-resume').addEventListener('click', () => {
+  pauseOverlay.classList.remove('visible');
+  pausedGameState = null;
+});
+
+document.getElementById('btn-to-menu').addEventListener('click', () => {
+  pauseOverlay.classList.remove('visible');
+  pausedGameState = null;
+
+  selectRegion(null);
+  gameState = 'menu';
+  earthStopped = false;
+  timeRunning = false;
+  setTimeSpeed(0);
+
+  flagDisplayEl.classList.remove('visible');
+  gameInfoEl.classList.remove('visible');
+  document.getElementById('ui-left-bottom').classList.remove('visible');
+  document.getElementById('ui-right-bottom').classList.remove('visible');
+  document.getElementById('ui-right-top').classList.remove('visible');
+
+  earthAnim.from = earthGroup.position.x;
+  earthAnim.to = 0;
+  earthAnim.t = 0;
+  earthAnim.lastTick = performance.now();
+  earthAnim.active = true;
+
+  earthAnimX.from = earthGroup.position.y;
+  earthAnimX.to = 0;
+  earthAnimX.t = 0;
+  earthAnimX.lastTick = performance.now();
+  earthAnimX.active = true;
+
+  rotAnim.from = earthGroup.rotation.y;
+  rotAnim.to = 0;
+  rotAnim.t = 0;
+  rotAnim.lastTick = performance.now();
+  rotAnim.active = true;
+
+  rotAnimX.from = earthGroup.rotation.x;
+  rotAnimX.to = 0;
+  rotAnimX.t = 0;
+  rotAnimX.lastTick = performance.now();
+  rotAnimX.active = true;
+
+  camAnim.from = camera.position.clone();
+  camAnim.to = new THREE.Vector3(0, 0.8, 5);
+  cameraTarget.set(0, 0, 0);
+  camAnim.t = 0;
+  camAnim.lastTick = performance.now();
+  camAnim.active = true;
+
+  menuScreen.classList.remove('hidden');
+  selectHint.classList.remove('visible');
+  backBtnEl.classList.remove('visible');
+});
+
+confirmBtnEl.addEventListener('click', confirmSelection);
+
+const backBtnEl = document.getElementById('back-btn');
+backBtnEl.addEventListener('click', () => {
+  if (gameState !== 'selecting') return;
+  selectRegion(null);
+  gameState = 'menu';
+  earthStopped = false;
+  backBtnEl.classList.remove('visible');
+  document.getElementById('mode-toggle').classList.remove('visible');
+  earthAnim.from = earthGroup.position.x;
+  earthAnim.to = 0;
+  earthAnim.t = 0;
+  earthAnim.lastTick = performance.now();
+  earthAnim.active = true;
+  camAnim.from = camera.position.clone();
+  camAnim.to = new THREE.Vector3(0, 0.8, 5);
+  cameraTarget.set(0, 0, 0);
+  camAnim.t = 0;
+  camAnim.lastTick = performance.now();
+  camAnim.active = true;
+  menuScreen.classList.remove('hidden');
+  selectHint.classList.remove('visible');
+});
+
+// ============================================================
+// 点击事件
+// ============================================================
+renderer.domElement.addEventListener('pointerdown', (e) => {
+  mouseDown.set(e.clientX, e.clientY);
+});
+
+renderer.domElement.addEventListener('pointerup', (e) => {
+  if (gameState === 'menu') return;
+  if (e.shiftKey) return;
+  const dx = e.clientX - mouseDown.x;
+  const dy = e.clientY - mouseDown.y;
+  if (dx * dx + dy * dy > 25) return;
+
+  if (!window.__countriesGeoJSON) return;
+
+  mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+  mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+  raycaster.setFromCamera(mouse, camera);
+
+  const earthMesh = earthGroup.getObjectByName('earth');
+  if (!earthMesh) return;
+  earthGroup.updateMatrixWorld(true);
+  const hits = raycaster.intersectObject(earthMesh, false);
+  if (hits.length === 0) { selectRegion(null); return; }
+
+  const { lat, lon } = vec3ToLatLon(hits[0].point);
+  const dist = camera.position.length();
+
+  if (dist <= 1.5) {
+    const province = getProvinceAt(lon, lat);
+    if (province) { selectRegion(province, 'province'); return; }
+    const twFeature = (window.__countriesGeoJSON?.features || []).find(f => f.properties.NAME === 'Taiwan');
+    if (twFeature && pointInFeature(lon, lat, twFeature)) {
+      selectRegion({ geometry: twFeature.geometry, properties: { name: 'Taiwan', admin: 'China' } }, 'province');
+      return;
+    }
+  }
+  const feature = getCountryAt(lon, lat);
+  if (feature) {
+    const countryName = feature.properties.NAME || '';
+    const provinces = window.__provincesGeoJSON;
+    const hasProvinces = provinces && provinces.features.some(f => f.properties.admin === countryName);
+    selectRegion(feature, hasProvinces ? 'country' : 'province');
+  } else {
+    selectRegion(null);
+  }
+});
+
+window.addEventListener('keydown', (e) => {
+  if (e.code === 'Escape' && gameState === 'selecting' && selectedCountry) selectRegion(null);
+  if (e.code === 'KeyC' && gameState === 'playing') {
+    earthGroup.position.x = 0;
+    earthGroup.position.y = 0;
+  }
+});
+
+// ============================================================
+// 光照
+// ============================================================
+const ambientLight = new THREE.AmbientLight(0xffffff, 2.0);
+scene.add(ambientLight);
+const hemiLight = new THREE.HemisphereLight(0x8899cc, 0x445566, 0.5);
+scene.add(hemiLight);
+
+// ============================================================
+// 动画循环
+// ============================================================
+function animate() {
+  requestAnimationFrame(animate);
+  tickTime(performance.now());
+
+  // 地球自转
+  if (gameState === 'menu') {
+    earthGroup.rotation.y += 0.001;
+  } else if (gameState === 'selecting' && !earthStopped) {
+    earthGroup.rotation.y += 0.0004;
+  }
+
+  // 鼠标跟随视差（预选界面）
+  if (gameState === 'selecting') {
+    if (!dragMode) {
+      const backBtn = document.getElementById('back-btn');
+      const rect = backBtn.getBoundingClientRect();
+      const mx = mouseScreenX * window.innerWidth;
+      const my = mouseScreenY * window.innerHeight;
+      const overBack = mx >= rect.left && mx <= rect.right && my >= rect.top && my <= rect.bottom;
+      if (overBack) {
+        earthGroup.rotation.x *= 0.85;
+      } else {
+        const targetRotX = -(mouseNormY) * 0.5;
+        earthGroup.rotation.x += (targetRotX - earthGroup.rotation.x) * 0.12;
+      }
+    }
+  }
+
+  // 拖拽惯性
+  if ((gameState === 'selecting' || gameState === 'playing') && !globeDragging) {
+    if (Math.abs(globeVelocityX) > 0.0001) {
+      earthGroup.rotation.y += globeVelocityX;
+      globeVelocityX *= 0.95;
+    }
+    if (gameState === 'playing' && Math.abs(globeVelocityY) > 0.0001) {
+      earthGroup.rotation.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, earthGroup.rotation.x + globeVelocityY));
+      globeVelocityY *= 0.95;
+    }
+    if (gameState === 'selecting' && dragMode && Math.abs(globeVelocityY) > 0.0001) {
+      earthGroup.rotation.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, earthGroup.rotation.x + globeVelocityY));
+      globeVelocityY *= 0.95;
+    }
+  }
+
+  // 地球位移动画
+  if (earthAnim.active) {
+    const now = performance.now();
+    const dt = now - (earthAnim.lastTick || now);
+    earthAnim.lastTick = now;
+    earthAnim.t += dt;
+    let p = Math.min(1, earthAnim.t / earthAnim.dur);
+    p = 1 - Math.pow(1 - p, 4);
+    earthGroup.position.x = earthAnim.from + (earthAnim.to - earthAnim.from) * p;
+    if (earthAnim.t >= earthAnim.dur) {
+      earthAnim.active = false;
+      earthGroup.position.x = earthAnim.to;
+    }
+  }
+  if (earthAnimX.active) {
+    const now = performance.now();
+    const dt = now - (earthAnimX.lastTick || now);
+    earthAnimX.lastTick = now;
+    earthAnimX.t += dt;
+    let p = Math.min(1, earthAnimX.t / earthAnimX.dur);
+    p = 1 - Math.pow(1 - p, 4);
+    earthGroup.position.y = earthAnimX.from + (earthAnimX.to - earthAnimX.from) * p;
+    if (earthAnimX.t >= earthAnimX.dur) {
+      earthAnimX.active = false;
+      earthGroup.position.y = earthAnimX.to;
+    }
+  }
+
+  // 地球旋转动画
+  if (rotAnim.active) {
+    const now = performance.now();
+    const dt = now - (rotAnim.lastTick || now);
+    rotAnim.lastTick = now;
+    rotAnim.t += dt;
+    let p = Math.min(1, rotAnim.t / rotAnim.dur);
+    p = 1 - Math.pow(1 - p, 4);
+    earthGroup.rotation.y = rotAnim.from + (rotAnim.to - rotAnim.from) * p;
+    if (rotAnim.t >= rotAnim.dur) {
+      rotAnim.active = false;
+      earthGroup.rotation.y = rotAnim.to;
+    }
+  }
+  if (rotAnimX.active) {
+    const now = performance.now();
+    const dt = now - (rotAnimX.lastTick || now);
+    rotAnimX.lastTick = now;
+    rotAnimX.t += dt;
+    let p = Math.min(1, rotAnimX.t / rotAnimX.dur);
+    p = 1 - Math.pow(1 - p, 4);
+    earthGroup.rotation.x = rotAnimX.from + (rotAnimX.to - rotAnimX.from) * p;
+    if (rotAnimX.t >= rotAnimX.dur) {
+      rotAnimX.active = false;
+      earthGroup.rotation.x = rotAnimX.to;
+    }
+  }
+
+  // 相机动画
+  if (camAnim.active) {
+    const now = performance.now();
+    const dt = now - (camAnim.lastTick || now);
+    camAnim.lastTick = now;
+    camAnim.t += dt;
+    let p = Math.min(1, camAnim.t / camAnim.dur);
+    p = 1 - Math.pow(1 - p, 4);
+    camera.position.lerpVectors(camAnim.from, camAnim.to, p);
+    if (camAnim.t >= camAnim.dur) {
+      camAnim.active = false;
+      camera.position.copy(camAnim.to);
+      cameraTarget.set(0, 0, 0);
+      controls.target.set(0, 0, 0);
+      controls.object.position.copy(camAnim.to);
+      controls.update();
+    }
+  }
+
+  const dist = camera.position.length();
+  document.getElementById('zoom-distance').textContent = '距离: ' + dist.toFixed(2);
+  document.getElementById('zoom-distance').style.opacity = gameState === 'menu' ? '0' : '1';
+  controls.rotateSpeed = 0.08 + 0.92 * Math.min(1, (dist - 1.2) / 6.8);
+  if (window.__provinceBorderMat) {
+    window.__provinceBorderMat.opacity = 0.85 * (1.0 - Math.min(1, Math.max(0, (dist - 1.2) / 0.8)));
+  }
+  if (window.__colorSphereMat) {
+    window.__colorSphereMat.opacity = Math.min(1, Math.max(0, (dist - 0.5) / 2.3));
+  }
+  // 选中呼吸动画
+  if (window.__highlightMat && highlightSphere.visible) {
+    window.__highlightMat.opacity = 0.5 + 0.2 * Math.sin(performance.now() * 0.003);
+  }
+  if (window.__allLabels && window.__allLabels.length > 0) {
+    const maxLogArea = Math.log((window.__maxLabelArea || 150000) + 1);
+    if (dist > 1.5) {
+      for (const lbl of window.__allLabels) {
+        const areaScore = Math.log(lbl.area + 1) / maxLogArea;
+        lbl.mesh.visible = areaScore > 0.25;
+        lbl.mesh.material.opacity = 1;
+      }
+    } else {
+      for (const lbl of window.__allLabels) {
+        lbl.mesh.visible = true;
+        lbl.mesh.material.opacity = Math.min(1, Math.max(0, (dist - 1.32) / 0.08));
+      }
+    }
+  }
+  // 省级标签：距离<1.6逐渐显示
+  if (window.__provinceLabels && window.__provinceLabels.length > 0) {
+    const provAlpha = Math.min(1, Math.max(0, (1.6 - dist) / 0.3));
+    for (const lbl of window.__provinceLabels) {
+      lbl.mesh.visible = provAlpha > 0.01;
+      lbl.mesh.material.opacity = provAlpha;
+    }
+  }
+  controls.update();
+  composer.render();
+}
+animate();
+
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight); composer.setSize(window.innerWidth, window.innerHeight);
+});
+
+console.log('3D HD Earth - NASA Blue Marble');
+</script>
+</body>
+</html>
