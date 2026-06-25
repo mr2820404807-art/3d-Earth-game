@@ -58,7 +58,9 @@ canvas{display:block}
 #aoh-top-bar .bar-flag{width:40px;height:26px;object-fit:contain;cursor:pointer;flex-shrink:0;border:1px solid rgba(80,120,200,.3);border-radius:3px}
 #aoh-top-bar .bar-country{font-size:14px;font-weight:600;color:#e0d0a0;letter-spacing:2px;margin-right:12px;white-space:nowrap}
 #aoh-top-bar .bar-sep{width:1px;height:28px;background:rgba(80,120,200,.25);flex-shrink:0}
-#aoh-top-bar .bar-res{display:flex;align-items:center;gap:4px;padding:0 8px;white-space:nowrap;cursor:default}
+#aoh-top-bar .bar-res{display:flex;align-items:center;gap:4px;padding:0 8px;white-space:nowrap;cursor:default;position:relative}
+#aoh-top-bar .bar-res .tip{display:none;position:absolute;top:100%;left:50%;transform:translateX(-50%);margin-top:6px;background:rgba(10,15,30,.95);border:1px solid rgba(80,120,200,.4);border-radius:6px;padding:4px 10px;font-size:11px;color:#bbddee;white-space:nowrap;z-index:200;pointer-events:none}
+#aoh-top-bar .bar-res:hover .tip{display:block}
 #aoh-top-bar .bar-res .res-icon{font-size:14px}
 #aoh-top-bar .bar-res .res-val{font-weight:600;color:#dde}
 #aoh-top-bar .bar-res.clickable{cursor:pointer;border-radius:4px;transition:background .2s}
@@ -187,20 +189,20 @@ body{overflow:hidden}
   <img class="bar-flag" id="bar-flag-img" src="" alt="">
   <span class="bar-country" id="bar-country-name">--</span>
   <div class="bar-sep"></div>
-  <div class="bar-res" id="res-gold"><span class="res-icon">💰</span><span class="res-val" id="val-gold">0</span></div>
-  <div class="bar-res" id="res-economy"><span class="res-icon">📊</span><span class="res-val" id="val-economy">0</span></div>
-  <div class="bar-res" id="res-manpower"><span class="res-icon">👥</span><span class="res-val" id="val-manpower">0</span></div>
-  <div class="bar-res clickable" id="res-diplomacy"><span class="res-icon">🤝</span><span class="res-val" id="val-diplomacy">0</span></div>
-  <div class="bar-res" id="res-legacy"><span class="res-icon">🏛</span><span class="res-val" id="val-legacy">0</span></div>
+  <div class="bar-res" id="res-gold"><span class="res-icon">💰</span><span class="res-val" id="val-gold">0</span><span class="tip">金币 - 用于建设和招募</span></div>
+  <div class="bar-res" id="res-economy"><span class="res-icon">📊</span><span class="res-val" id="val-economy">0</span><span class="tip">经济 - 影响收入和增长率</span></div>
+  <div class="bar-res" id="res-manpower"><span class="res-icon">👥</span><span class="res-val" id="val-manpower">0</span><span class="tip">人力 - 用于征兵</span></div>
+  <div class="bar-res clickable" id="res-diplomacy"><span class="res-icon">🤝</span><span class="res-val" id="val-diplomacy">0</span><span class="tip">外交点 - 点击查看关系</span></div>
+  <div class="bar-res" id="res-legacy"><span class="res-icon">🏛</span><span class="res-val" id="val-legacy">0</span><span class="tip">威望 - 影响外交</span></div>
   <div class="bar-sep"></div>
-  <div class="bar-res" id="res-population"><span class="res-icon">🏘</span><span class="res-val" id="val-population">0</span></div>
-  <div class="bar-res" id="res-growth"><span class="res-icon">📈</span><span class="res-val" id="val-growth">+0%</span></div>
-  <div class="bar-res" id="res-war"><span class="res-icon">⚔</span><span class="res-val" id="val-war">和平</span></div>
+  <div class="bar-res" id="res-population"><span class="res-icon">🏘</span><span class="res-val" id="val-population">0</span><span class="tip">人口 - 国家总人口</span></div>
+  <div class="bar-res" id="res-growth"><span class="res-icon">📈</span><span class="res-val" id="val-growth">+0%</span><span class="tip">增长率 - 受经济影响</span></div>
+  <div class="bar-res" id="res-war"><span class="res-icon">⚔</span><span class="res-val" id="val-war">和平</span><span class="tip">战争状态</span></div>
   <div id="bar-time">
     <span class="time-text" id="time-text">2026年1月1日 00:00</span>
-    <button class="time-btn" id="btn-slower" title="减速">-</button>
+    <button class="time-btn" id="btn-slower" title="减速 - 降低游戏速度">-</button>
     <span id="time-speed">x1</span>
-    <button class="time-btn" id="btn-faster" title="加速">+</button>
+    <button class="time-btn" id="btn-faster" title="加速 - 提高游戏速度">+</button>
     <button class="time-btn" id="btn-pause" title="暂停/继续">||</button>
   </div>
 </div>
@@ -220,11 +222,11 @@ body{overflow:hidden}
 
 <div id="aoh-bottom-panel">
   <div class="bp-section">
-    <button class="bp-btn" id="bp-officer">军官</button>
-    <button class="bp-btn" id="bp-reorganize">重组</button>
-    <button class="bp-btn" id="bp-transport">运输</button>
-    <button class="bp-btn" id="bp-fortress">要塞</button>
-    <button class="bp-btn" id="bp-colonize">殖民</button>
+    <button class="bp-btn" id="bp-officer" title="招募军官 - 增强军队能力">军官</button>
+    <button class="bp-btn" id="bp-reorganize" title="重组军团 - 调整编制">重组</button>
+    <button class="bp-btn" id="bp-transport" title="运输 - 调动军队">运输</button>
+    <button class="bp-btn" id="bp-fortress" title="要塞 - 建造防御工事">要塞</button>
+    <button class="bp-btn" id="bp-colonize" title="殖民 - 扩张领土">殖民</button>
   </div>
   <div class="bp-sep"></div>
   <div class="bp-section">
@@ -1559,7 +1561,7 @@ function aohShowRightPanel(feature, level) {
     </div>
     <div class="rp-section">
       <div class="rp-section-title">省份信息</div>
-      <div class="rp-stat"><span class="rp-label">经济</span><span class="rp-value">${provEcon.economy}</span></div>
+      <div class="rp-stat"><span class="rp-label">经济</span><span class="rp-value">${parseFloat(provEcon.economy.toFixed(2))}</span></div>
       <div class="rp-stat"><span class="rp-label">人口</span><span class="rp-value">${(provEcon.population / 1000).toFixed(1)}K</span></div>
       <div class="rp-stat"><span class="rp-label">建筑等级</span><span class="rp-value">${provEcon.buildingLevel}</span></div>
     </div>
@@ -1922,6 +1924,12 @@ document.querySelectorAll('.popup-close').forEach(btn => {
   });
 });
 
+document.getElementById('bar-flag-img').addEventListener('click', () => {
+  if (gameState === 'playing') {
+    document.getElementById('pause-overlay').classList.add('visible');
+  }
+});
+
 document.getElementById('btn-resume').addEventListener('click', () => {
   document.getElementById('pause-overlay').classList.remove('visible');
 });
@@ -2050,13 +2058,13 @@ const aohRes = { gold: 500, economy: 50, manpower: 1000, diplomacy: 50, legacy: 
 
 function aohUpdateResources() {
   document.getElementById('val-gold').textContent = Math.floor(aohRes.gold);
-  document.getElementById('val-economy').textContent = aohRes.economy;
-  document.getElementById('val-manpower').textContent = aohRes.manpower;
-  document.getElementById('val-diplomacy').textContent = aohRes.diplomacy;
-  document.getElementById('val-legacy').textContent = aohRes.legacy;
+  document.getElementById('val-economy').textContent = parseFloat(aohRes.economy.toFixed(2));
+  document.getElementById('val-manpower').textContent = parseFloat(aohRes.manpower.toFixed(2));
+  document.getElementById('val-diplomacy').textContent = parseFloat(aohRes.diplomacy.toFixed(2));
+  document.getElementById('val-legacy').textContent = parseFloat(aohRes.legacy.toFixed(2));
   document.getElementById('val-population').textContent = aohRes.population > 1000000 ? (aohRes.population / 1000000).toFixed(2) + 'M' : (aohRes.population / 1000).toFixed(0) + 'K';
   document.getElementById('val-growth').textContent = (aohRes.growth >= 0 ? '+' : '') + aohRes.growth.toFixed(1) + '%';
-  document.getElementById('val-war').textContent = aohRes.war > 0 ? `战争(-${aohRes.war})` : '和平';
+  document.getElementById('val-war').textContent = aohRes.war > 0 ? '战争(-' + aohRes.war + ')' : '和平';
 }
 
 function aohNotify(msg) {
