@@ -105,7 +105,8 @@ canvas{display:block}
 #aoh-right-panel .rp-stat .rp-value{color:#dde;font-weight:600}
 #aoh-right-panel .rp-divider{height:1px;background:rgba(80,120,200,.15);margin:8px 0}
 
-#aoh-side-btns{position:fixed;top:52px;right:0;z-index:101;display:none;flex-direction:column;gap:4px;padding:8px 6px}
+#aoh-side-btns{position:fixed;top:52px;right:0;z-index:101;display:none;flex-direction:column;gap:4px;padding:8px 6px;transition:right .3s}
+#aoh-side-btns.shifted{right:288px}
 #aoh-side-btns.visible{display:flex}
 #aoh-side-btns .sb-btn{width:44px;height:44px;border-radius:8px;border:1px solid rgba(80,120,200,.25);background:rgba(15,18,32,.88);color:#7788aa;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .2s;position:relative}
 #aoh-side-btns .sb-btn:hover{background:rgba(40,70,120,.5);border-color:rgba(100,180,255,.5);color:#dde}
@@ -161,6 +162,11 @@ canvas{display:block}
 .diplo-row .diplo-rel.rival{background:rgba(255,100,80,.15);color:#dd8877}
 
 #select-box{position:fixed;border:1px solid rgba(100,200,255,.5);background:rgba(100,200,255,.08);pointer-events:none;display:none;z-index:50}
+#army-panel{position:fixed;bottom:70px;left:30px;z-index:100;display:none;background:rgba(15,18,32,.95);border:1px solid rgba(80,120,200,.3);border-radius:10px;padding:12px 16px;color:#aabbcc;font-size:12px;min-width:180px}
+#army-panel.visible{display:block}
+#army-panel .ap-title{font-size:13px;color:#e0d0a0;margin-bottom:8px;font-weight:600}
+#army-panel .ap-btn{width:100%;padding:7px 0;margin:3px 0;border:1px solid rgba(80,120,200,.25);border-radius:5px;background:rgba(20,30,50,.5);color:#8899aa;font-size:12px;cursor:pointer;transition:all .15s;text-align:center}
+#army-panel .ap-btn:hover{background:rgba(40,60,90,.6);border-color:rgba(100,180,255,.4);color:#dde}
 
 body{overflow:hidden}
 </style>
@@ -198,6 +204,8 @@ body{overflow:hidden}
   <div class="bar-res" id="res-population"><span class="res-icon">🏘</span><span class="res-val" id="val-population">0</span><span class="tip">人口 - 国家总人口</span></div>
   <div class="bar-res" id="res-growth"><span class="res-icon">📈</span><span class="res-val" id="val-growth">+0%</span><span class="tip">增长率 - 受经济影响</span></div>
   <div class="bar-res" id="res-war"><span class="res-icon">⚔</span><span class="res-val" id="val-war">和平</span><span class="tip">战争状态</span></div>
+  <div class="bar-sep"></div>
+  <div class="bar-res clickable" id="res-missile"><span class="res-icon">🚀</span><span class="res-val" id="val-missile">0</span><span class="tip">弹道导弹</span></div>
   <div id="bar-time">
     <span class="time-text" id="time-text">2026年1月1日 00:00</span>
     <button class="time-btn" id="btn-slower" title="减速 - 降低游戏速度">-</button>
@@ -287,6 +295,13 @@ body{overflow:hidden}
   </div>
 </div>
 
+<div id="army-panel">
+  <div class="ap-title" id="army-panel-title">军队</div>
+  <button class="ap-btn" id="army-btn-move">移动</button>
+  <button class="ap-btn" id="army-btn-reorganize">重组</button>
+  <button class="ap-btn" id="army-btn-disband">解散</button>
+  <button class="ap-btn" id="army-btn-merge">合并</button>
+</div>
 <div id="loading">加载高清贴图中...</div>
 
 <script type="importmap">
@@ -517,7 +532,14 @@ createStarField();
 
 const earthGroup = new THREE.Group();
 scene.add(earthGroup);
+const armyMarkers = new THREE.Group();
+armyMarkers.name = 'armyMarkers';
+earthGroup.add(armyMarkers);
+let selectedArmy = null;
 
+// ============================================================
+// 大气层
+// ============================================================
 function createAtmosphere() {
   const innerGeo = new THREE.SphereGeometry(1.08, 64, 64);
   const innerMat = new THREE.ShaderMaterial({
@@ -543,7 +565,6 @@ function createAtmosphere() {
 createAtmosphere();
 
 const earthGeo = new THREE.SphereGeometry(1, 128, 128);
-
 function createBumpMap() {
   const c = document.createElement('canvas'); c.width = 1024; c.height = 512;
   const ctx = c.getContext('2d');
@@ -578,20 +599,20 @@ const bumpMap = createBumpMap();
         const r = d[i], g = d[i + 1], b = d[i + 2];
         const lum = 0.299 * r + 0.587 * g + 0.114 * b;
         let f;
-        if      (lum > 220) f = 0.55;
+        if (lum > 220) f = 0.55;
         else if (lum > 185) f = 0.65;
         else if (lum > 150) f = 0.78;
         else if (lum > 110) f = 0.90;
-        else if (lum < 35)  f = 1.20;
-        else if (lum < 70)  f = 1.08;
-        else                f = 1.0;
+        else if (lum < 35) f = 1.20;
+        else if (lum < 70) f = 1.08;
+        else f = 1.0;
         d[i] = Math.min(255, r * f);
         d[i + 1] = Math.min(255, g * f);
         d[i + 2] = Math.min(255, b * f);
       }
       offset = end;
       if (offset < totalPixels) {
-        document.getElementById('loading').textContent = `亮度平衡中... ${Math.round(offset / totalPixels * 100)}%`;
+        document.getElementById('loading').textContent = '亮度平衡中... ' + Math.round(offset / totalPixels * 100) + '%';
         setTimeout(processChunk, 0);
       } else {
         ctx.putImageData(imageData, 0, 0);
@@ -607,6 +628,7 @@ const bumpMap = createBumpMap();
         earthGroup.add(earth);
         document.getElementById('loading').style.opacity = '0';
         setTimeout(() => { const el = document.getElementById('loading'); if (el) el.remove(); }, 500);
+        console.log('贴图加载完成: ' + cvs.width + 'x' + cvs.height);
       }
     }
     processChunk();
@@ -614,6 +636,7 @@ const bumpMap = createBumpMap();
   img.onerror = () => { document.getElementById('loading').textContent = '贴图加载失败'; };
   img.src = 'earth_hd.jpg';
 })();
+
 
 function createBorderOverlay() {
   const countryCanvas = document.createElement('canvas');
@@ -1553,6 +1576,43 @@ function aohShowRightPanel(feature, level) {
   const cnCountry = window.__chineseNames?.[admin] || admin;
   const flagUrl = getFlagUrl(admin);
   const provEcon = aohGetProvinceEcon(name);
+  const isOwnCountry = confirmedCountry && admin === confirmedCountry.enName;
+
+  let buildHtml = '';
+  if (isOwnCountry && level === 'province') {
+    const buildKeys = Object.keys(buildingDefs);
+    let rows = '';
+    for (const key of buildKeys) {
+      const def = buildingDefs[key];
+      if (key === 'port' && !provEcon.isCoastal) continue;
+      if (def.requires && !countryFlags.hasAerospaceCompany) continue;
+      if (def.unique && countryFlags.hasAerospaceCompany) continue;
+      const lv = provEcon[key + 'Lv'] || 0;
+      const atMax = lv >= def.maxLevel;
+      const queueKey = name + '|' + key;
+      const isBuilding = !!buildingQueue[queueKey];
+      const daysLeft = isBuilding ? buildingQueue[queueKey].daysLeft : 0;
+      const cost = Math.round(def.baseCost * (1 + lv * 0.5));
+      const canBuild = aohRes.gold >= cost && !atMax && !isBuilding;
+      const statusText = isBuilding ? '建造中 ' + daysLeft + '天' : atMax ? 'MAX' : cost + '💰';
+      rows += `<div class="rp-build-row" data-key="${key}" data-cost="${cost}" style="display:flex;align-items:center;justify-content:space-between;padding:5px 8px;margin:3px 0;border-radius:4px;border:1px solid ${canBuild ? 'rgba(100,200,120,.3)' : 'rgba(60,80,110,.3)'};background:${canBuild ? 'rgba(20,40,30,.3)' : 'rgba(20,30,50,.3)'};cursor:${canBuild ? 'pointer' : 'default'};transition:all .15s;">
+        <span style="font-size:12px;color:#d4c8a0;">${def.name}</span>
+        <span style="font-size:11px;color:#8a9ab0;">Lv.${lv}/${def.maxLevel}</span>
+        <span style="font-size:11px;color:${isBuilding ? '#f0c864' : canBuild ? '#64dc8c' : '#555'};font-weight:600;">${statusText}</span>
+      </div>`;
+    }
+    if (rows) {
+      buildHtml = `<div class="rp-divider"></div><div class="rp-section"><div class="rp-section-title">建筑（点击建造/升级）</div>${rows}</div>`;
+    }
+  }
+
+  const recruitHtml = isOwnCountry && level === 'province' ? `
+    <div class="rp-divider"></div>
+    <div class="rp-section">
+      <div class="rp-section-title">军事</div>
+      <button id="rp-btn-recruit" style="width:100%;padding:8px;border:1px solid rgba(100,180,255,.4);border-radius:6px;background:rgba(20,40,70,.4);color:#bbddee;font-size:13px;cursor:pointer;transition:all .2s;">征召军团（20金 + 500人力）</button>
+    </div>
+  ` : '';
 
   panel.innerHTML = `
     <div class="rp-header">
@@ -1563,23 +1623,53 @@ function aohShowRightPanel(feature, level) {
       <div class="rp-section-title">省份信息</div>
       <div class="rp-stat"><span class="rp-label">经济</span><span class="rp-value">${parseFloat(provEcon.economy.toFixed(2))}</span></div>
       <div class="rp-stat"><span class="rp-label">人口</span><span class="rp-value">${(provEcon.population / 1000).toFixed(1)}K</span></div>
-      <div class="rp-stat"><span class="rp-label">建筑等级</span><span class="rp-value">${provEcon.buildingLevel}</span></div>
     </div>
-    <div class="rp-divider"></div>
-    <div class="rp-section">
-      <div class="rp-section-title">建筑</div>
-      <div class="rp-stat"><span class="rp-label">道路</span><span class="rp-value">Lv.${provEcon.roadLv}</span></div>
-      <div class="rp-stat"><span class="rp-label">港口</span><span class="rp-value">${provEcon.isCoastal ? 'Lv.' + provEcon.portLv : '无'}</span></div>
-      <div class="rp-stat"><span class="rp-label">基础设施</span><span class="rp-value">Lv.${provEcon.infraLv}</span></div>
-      <div class="rp-stat"><span class="rp-label">农场</span><span class="rp-value">Lv.${provEcon.farmLv}</span></div>
-      <div class="rp-stat"><span class="rp-label">军营</span><span class="rp-value">Lv.${provEcon.barrackLv}</span></div>
-    </div>
+    ${buildHtml}
+    ${recruitHtml}
   `;
+
+  if (isOwnCountry && level === 'province') {
+    panel.querySelectorAll('.rp-build-row').forEach(row => {
+      row.addEventListener('click', () => {
+        const key = row.dataset.key;
+        const cost = parseInt(row.dataset.cost);
+        const def = buildingDefs[key];
+        if (aohRes.gold < cost) { aohNotify('金币不足，需要' + cost); return; }
+        const lv = provEcon[key + 'Lv'] || 0;
+        if (lv >= def.maxLevel) return;
+        const queueKey = name + '|' + key;
+        if (buildingQueue[queueKey]) { aohNotify('该建筑正在建造中'); return; }
+        aohRes.gold -= cost;
+        buildingQueue[queueKey] = { name, key, daysLeft: def.buildTime };
+        aohUpdateResources();
+        aohNotify(def.name + ' 开始建造，需' + def.buildTime + '天');
+        aohShowRightPanel(selectedCountry.feature, selectedCountry.level);
+      });
+    });
+  }
+
+  const recruitBtn = document.getElementById('rp-btn-recruit');
+  if (recruitBtn) {
+    recruitBtn.addEventListener('click', () => {
+      if (aohRes.gold < 20) { aohNotify('金币不足，需要20'); return; }
+      if (aohRes.manpower < 500) { aohNotify('人力不足，需要500'); return; }
+      aohRes.gold -= 20;
+      aohRes.manpower -= 500;
+      if (!armies[name]) armies[name] = 0;
+      armies[name] += 500;
+      updateArmyMarker(name, armies[name], confirmedCountry?.enName || '');
+      aohUpdateResources();
+      aohNotify('征召成功！' + cnProv + '驻军 ' + armies[name] + '人');
+    });
+  }
+
   panel.classList.add('visible');
+  document.getElementById('aoh-side-btns').classList.add('shifted');
 }
 
 function aohHideRightPanel() {
   document.getElementById('aoh-right-panel').classList.remove('visible');
+  document.getElementById('aoh-side-btns').classList.remove('shifted');
 }
 
 function enterSelecting() {
@@ -1725,7 +1815,7 @@ const _origSetTimeSpeed = function(idx) {
   if (pb) { pb.textContent = timeRunning ? '||' : '>'; pb.classList.toggle('active', !timeRunning); }
 };
 
-const advanceTime = function() { _origAdvanceTime(); aohTickEconomy(); aohTickPopulation(); aohTickProvinceBuildings(); aohTickTech(); };
+const advanceTime = function() { _origAdvanceTime(); aohTickEconomy(); aohTickPopulation(); aohTickProvinceBuildings(); aohTickTech(); aohTickMissiles(); aohTickConstruction(); };
 const setTimeSpeed = function(i) { _origSetTimeSpeed(i); aohSyncTime(); };
 
 function aohSyncTime() {
@@ -1788,10 +1878,8 @@ function animate() {
 
   const sg = scene.getObjectByName('starGroup');
   if (sg) {
-    if (globeDragging) {
-      sg.rotation.y = earthGroup.rotation.y;
-      sg.rotation.x = earthGroup.rotation.x;
-    }
+    sg.rotation.y = earthGroup.rotation.y;
+    sg.rotation.x = earthGroup.rotation.x;
   }
 
   if (earthAnim.active) {
@@ -1853,6 +1941,7 @@ function animate() {
   }
 
   const dist = camera.position.length();
+  armyMarkers.visible = dist < 2.5;
   const zdEl = document.getElementById('zoom-distance');
   zdEl.textContent = '距离: ' + dist.toFixed(2);
   zdEl.style.opacity = gameState === 'menu' ? '0' : '1';
@@ -1942,6 +2031,7 @@ document.getElementById('btn-to-menu').addEventListener('click', () => {
   timeRunning = false;
   setTimeSpeed(0);
   aohHideUI();
+  countryFlags.hasAerospaceCompany = false;
   earthAnim.from = earthGroup.position.x;
   earthAnim.to = 0;
   earthAnim.t = 0;
@@ -1989,21 +2079,42 @@ document.addEventListener('pointerup', (e) => {
   mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
   mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
   raycaster.setFromCamera(mouse, camera);
+  const armyHits = raycaster.intersectObjects(armyMarkers.children, true);
+  if (armyHits.length > 0) {
+    let obj = armyHits[0].object;
+    while (obj.parent && obj.parent !== armyMarkers) obj = obj.parent;
+    if (obj.name && obj.name.startsWith('army_')) {
+      const provName = obj.name.replace('army_', '');
+      if (armies[provName] > 0) {
+        selectedArmy = provName;
+        showArmyPanel(provName);
+        return;
+      }
+    }
+  }
+  raycaster.setFromCamera(mouse, camera);
 
   const earthMesh = earthGroup.getObjectByName('earth');
   if (!earthMesh) return;
   earthGroup.updateMatrixWorld(true);
   const hits = raycaster.intersectObject(earthMesh, false);
-  if (hits.length === 0) { selectRegion(null); return; }
+  if (hits.length === 0) { selectRegion(null); hideArmyPanel(); return; }
 
   const { lat, lon } = vec3ToLatLon(hits[0].point);
   const dist = camera.position.length();
 
   if (dist <= 1.5) {
     const province = getProvinceAt(lon, lat);
-    if (province) { selectRegion(province, 'province'); return; }
+    if (province) { hideArmyPanel(); selectRegion(province, 'province'); return; }
     const fallback = getCountryAt(lon, lat);
-    if (fallback) { selectRegion(fallback, 'country'); return; }
+    if (fallback) {
+      const countryName = fallback.properties.NAME || '';
+      const provinces = window.__provincesGeoJSON;
+      const hasProvinces = provinces && provinces.features.some(f => f.properties.admin === countryName);
+      hideArmyPanel();
+      selectRegion(fallback, hasProvinces ? 'country' : 'province');
+      return;
+    }
     selectRegion(null);
     return;
   }
@@ -2012,7 +2123,8 @@ document.addEventListener('pointerup', (e) => {
     const countryName = feature.properties.NAME || '';
     const provinces = window.__provincesGeoJSON;
     const hasProvinces = provinces && provinces.features.some(f => f.properties.admin === countryName);
-    selectRegion(feature, hasProvinces ? 'country' : 'province');
+      hideArmyPanel();
+      selectRegion(feature, hasProvinces ? 'country' : 'province');
   } else {
     selectRegion(null);
   }
@@ -2054,7 +2166,7 @@ document.getElementById('bp-transport').addEventListener('click', () => { if (ga
 document.getElementById('bp-fortress').addEventListener('click', () => { if (gameState === 'playing') aohNotify('要塞功能开发中...'); });
 document.getElementById('bp-colonize').addEventListener('click', () => { if (gameState === 'playing') aohNotify('殖民功能开发中...'); });
 
-const aohRes = { gold: 500, economy: 50, manpower: 1000, diplomacy: 50, legacy: 0, population: 100000, growth: 1.2, war: 0 };
+const aohRes = { gold: 500, economy: 50, manpower: 1000, diplomacy: 50, legacy: 0, population: 100000, growth: 1.2, war: 0, missiles: 0 };
 
 function aohUpdateResources() {
   document.getElementById('val-gold').textContent = Math.floor(aohRes.gold);
@@ -2065,6 +2177,8 @@ function aohUpdateResources() {
   document.getElementById('val-population').textContent = aohRes.population > 1000000 ? (aohRes.population / 1000000).toFixed(2) + 'M' : (aohRes.population / 1000).toFixed(0) + 'K';
   document.getElementById('val-growth').textContent = (aohRes.growth >= 0 ? '+' : '') + aohRes.growth.toFixed(1) + '%';
   document.getElementById('val-war').textContent = aohRes.war > 0 ? '战争(-' + aohRes.war + ')' : '和平';
+  const missileEl = document.getElementById('val-missile');
+  if (missileEl) missileEl.textContent = aohRes.missiles;
 }
 
 function aohNotify(msg) {
@@ -2089,6 +2203,7 @@ function aohHideUI() {
   document.getElementById('aoh-left-sidebar').classList.remove('visible');
   document.getElementById('aoh-bottom-panel').classList.remove('visible');
   document.getElementById('aoh-side-btns').classList.remove('visible');
+  document.getElementById('aoh-side-btns').classList.remove('shifted');
   aohHideRightPanel();
   document.getElementById('tech-popup').classList.remove('visible');
   document.getElementById('officer-popup').classList.remove('visible');
@@ -2243,13 +2358,160 @@ function aohTickPopulation() {
   aohUpdateResources();
 }
 
+let missileTick = 0;
+function aohTickMissiles() {
+  missileTick++;
+  if (missileTick < 8) return;
+  missileTick = 0;
+  let factoryCount = 0;
+  for (const key in provinceData) {
+    if (provinceData[key].aerospaceFactoryLv > 0) factoryCount++;
+  }
+  if (factoryCount > 0) {
+    aohRes.missiles += factoryCount;
+    aohUpdateResources();
+  }
+}
+
+let constructionTick = 0;
+function aohTickConstruction() {
+  constructionTick++;
+  if (constructionTick < 8) return;
+  constructionTick = 0;
+  for (const queueKey in buildingQueue) {
+    buildingQueue[queueKey].daysLeft--;
+    if (buildingQueue[queueKey].daysLeft <= 0) {
+      const item = buildingQueue[queueKey];
+      const prov = provinceData[item.name];
+      const def = buildingDefs[item.key];
+      if (prov && def) {
+        prov[item.key + 'Lv'] = (prov[item.key + 'Lv'] || 0) + 1;
+        prov.economy += def.econBonus;
+        prov.population += def.popBonus;
+        if (item.key === 'aerospaceCompany') countryFlags.hasAerospaceCompany = true;
+        aohNotify(def.name + ' 建造完成！');
+      }
+      delete buildingQueue[queueKey];
+    }
+  }
+}
+
 const provinceData = {};
+const countryFlags = { hasAerospaceCompany: false };
+const buildingQueue = {};
+const armies = {};
+
+function latLonToVec3(lat, lon, r) {
+  const phi = (90 - lat) * Math.PI / 180;
+  const theta = (lon + 180) * Math.PI / 180;
+  return new THREE.Vector3(
+    -r * Math.sin(phi) * Math.cos(theta),
+    r * Math.cos(phi),
+    r * Math.sin(phi) * Math.sin(theta)
+  );
+}
+
+function getProvinceCenter(name) {
+  if (!window.__provincesGeoJSON) return null;
+  const feat = window.__provincesGeoJSON.features.find(f => f.properties.name === name);
+  if (!feat) return null;
+  const rings = [];
+  const geom = feat.geometry;
+  if (geom.type === 'Polygon') rings.push(geom.coordinates[0]);
+  else if (geom.type === 'MultiPolygon') geom.coordinates.forEach(p => rings.push(p[0]));
+  if (rings.length === 0) return null;
+  let bestRing = rings[0], bestArea = 0;
+  for (const ring of rings) {
+    let area = 0;
+    for (let i = 0; i < ring.length - 1; i++) {
+      area += ring[i][0] * ring[i+1][1] - ring[i+1][0] * ring[i][1];
+    }
+    if (Math.abs(area) > bestArea) { bestArea = Math.abs(area); bestRing = ring; }
+  }
+  let cx = 0, cy = 0;
+  for (const c of bestRing) { cx += c[0]; cy += c[1]; }
+  return latLonToVec3(cy / bestRing.length, cx / bestRing.length, 1.02);
+}
+
+function createArmyMarker(provinceName, troops, countryCode) {
+  const pos = getProvinceCenter(provinceName);
+  if (!pos) return null;
+  const group = new THREE.Group();
+  const canvas = document.createElement('canvas');
+  canvas.width = 128; canvas.height = 80;
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, 128, 80);
+  const cx = 64, cy = 24;
+  const flagUrl = getFlagUrl(countryCode);
+  if (flagUrl) {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      ctx.drawImage(img, cx - 20, cy - 12, 40, 24);
+      flagMat.map.needsUpdate = true;
+    };
+    img.src = flagUrl;
+  }
+  ctx.fillStyle = '#fff';
+  ctx.font = 'bold 13px Arial';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'top';
+  ctx.fillText(troops >= 1000 ? (troops/1000).toFixed(1)+'k' : troops, cx, cy + 18);
+  const flagTexture = new THREE.CanvasTexture(canvas);
+  const flagMat = new THREE.SpriteMaterial({ map: flagTexture, transparent: true, depthTest: false });
+  const flag = new THREE.Sprite(flagMat);
+  flag.position.copy(pos);
+  flag.scale.set(0.025, 0.016, 1);
+  group.add(flag);
+  group.name = 'army_' + provinceName;
+  armyMarkers.add(group);
+  return group;
+}
+
+function updateArmyMarker(provinceName, troops, countryCode) {
+  const existing = armyMarkers.getObjectByName('army_' + provinceName);
+  if (existing) armyMarkers.remove(existing);
+  if (troops > 0) createArmyMarker(provinceName, troops, countryCode);
+}
+
+function refreshAllArmyMarkers() {
+  while (armyMarkers.children.length > 0) armyMarkers.remove(armyMarkers.children[0]);
+  for (const prov in armies) {
+    if (armies[prov] > 0) createArmyMarker(prov, armies[prov], confirmedCountry?.enName || '');
+  }
+}
+
+function showArmyPanel(provinceName) {
+  const panel = document.getElementById('army-panel');
+  const troops = armies[provinceName] || 0;
+  document.getElementById('army-panel-title').textContent = provinceName + ' (' + troops + '人)';
+  panel.classList.add('visible');
+  document.getElementById('army-btn-move').onclick = () => { aohNotify('选择目标省份移动军队'); panel.classList.remove('visible'); };
+  document.getElementById('army-btn-reorganize').onclick = () => { aohNotify('重组功能开发中'); };
+  document.getElementById('army-btn-disband').onclick = () => {
+    aohRes.manpower += armies[provinceName];
+    delete armies[provinceName];
+    updateArmyMarker(provinceName, 0, '');
+    aohUpdateResources();
+    panel.classList.remove('visible');
+    selectedArmy = null;
+    aohNotify('军队已解散，人力已回收');
+  };
+  document.getElementById('army-btn-merge').onclick = () => { aohNotify('合并功能开发中'); };
+}
+
+function hideArmyPanel() {
+  document.getElementById('army-panel').classList.remove('visible');
+  selectedArmy = null;
+}
 const buildingDefs = {
-  road: { name: '道路', baseCost: 30, maxLevel: 5, econBonus: 3, popBonus: 100 },
-  port: { name: '港口', baseCost: 80, maxLevel: 5, econBonus: 8, popBonus: 500 },
-  infra: { name: '基础设施', baseCost: 50, maxLevel: 5, econBonus: 5, popBonus: 200 },
-  farm: { name: '农场', baseCost: 20, maxLevel: 5, econBonus: 2, popBonus: 300 },
-  barrack: { name: '军营', baseCost: 60, maxLevel: 5, econBonus: 1, popBonus: 0 },
+  road: { name: '道路', baseCost: 30, maxLevel: 5, econBonus: 3, popBonus: 100, buildTime: 2 },
+  port: { name: '港口', baseCost: 80, maxLevel: 5, econBonus: 8, popBonus: 500, buildTime: 4 },
+  infra: { name: '基础设施', baseCost: 50, maxLevel: 5, econBonus: 5, popBonus: 200, buildTime: 3 },
+  farm: { name: '农场', baseCost: 20, maxLevel: 5, econBonus: 2, popBonus: 300, buildTime: 1 },
+  barrack: { name: '军营', baseCost: 60, maxLevel: 5, econBonus: 1, popBonus: 0, buildTime: 3 },
+  aerospaceCompany: { name: '航天科技公司', baseCost: 500, maxLevel: 1, econBonus: 15, popBonus: 1000, unique: true, buildTime: 10 },
+  aerospaceFactory: { name: '航天科技工厂', baseCost: 1000, maxLevel: 1, econBonus: 30, popBonus: 5000, requires: 'aerospaceCompany', buildTime: 8 },
 };
 const coastalCountries = new Set([
   'United States', 'Canada', 'Mexico', 'Brazil', 'Argentina', 'Chile', 'Colombia', 'Peru',
@@ -2301,6 +2563,8 @@ function initProvinceBuildings() {
       infraLv: 1 + (h % 2),
       farmLv: 1 + (h % 2),
       barrackLv: 0 + (h % 2),
+      aerospaceCompanyLv: 0,
+      aerospaceFactoryLv: 0,
       isCoastal,
     };
   });
@@ -2309,9 +2573,10 @@ function initProvinceBuildings() {
 function aohGetProvinceEcon(name) {
   if (!provinceData[name]) {
     const h = nameHash(name || 'unknown');
-    return {
+    provinceData[name] = {
       economy: 20 + (h % 60), population: 50000 + (h % 500000),
-      buildingLevel: 1, roadLv: 1, portLv: 0, infraLv: 1, farmLv: 1, barrackLv: 0, isCoastal: false,
+      buildingLevel: 1, roadLv: 1, portLv: 0, infraLv: 1, farmLv: 1, barrackLv: 0,
+      aerospaceCompanyLv: 0, aerospaceFactoryLv: 0, isCoastal: false,
     };
   }
   return provinceData[name];
